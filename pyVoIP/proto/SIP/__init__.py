@@ -1,6 +1,4 @@
-from pyVoIP.SIP import error
-from pyVoIP.SIP import client
-from pyVoIP.SIP import message
+from pyVoIP.proto.SIP import client, error, message
 
 __all__ = [
     "SIPClient",
