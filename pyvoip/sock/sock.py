@@ -4,7 +4,7 @@ import ssl
 import threading
 from typing import Dict, List, Optional, Tuple
 
-from pyvoip.lib.types import KEY_PASSWORD, SOCKETS
+from pyvoip.lib.pyvoip_types import KEY_PASSWORD, SOCKETS
 from pyvoip.proto.SIP import SIPMessage
 from pyvoip.sock.transport import TransportMode
 

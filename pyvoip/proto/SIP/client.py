@@ -65,12 +65,42 @@ class SIPClient:
         self.registerThread: Optional[Timer] = None
         self.recvLock = Lock()
 
+    def send_b(
+        self, message: str, dst: str | None = None, dst_port: int | None = None
+    ) -> None:
+        """
+        Send a message to the server. This is the replacement for recurrent
+        self.out.sendto calls to allow to check on messages being sent out.
+        """
+
+        dst = dst or self.server
+        dst_port = dst_port or self.port
+
+        print(f"----> {dst}:{dst_port}")
+        print(message, end="\n")
+
+        self.out.sendto(message.encode("utf8"), (dst, dst_port))
+
+    def recv_b(self, buffsize: int = 8192) -> bytes:
+        """
+        Receive a message from the server. This is the replacement for recurrent
+        self.s.recv calls to allow to check on messages being received.
+        """
+
+        raw, (addr, port) = self.s.recvfrom(buffsize)
+        try:
+            print(f"<---- {addr}:{port}")
+            print(raw.decode("utf8"), end="\n")
+        except Exception as ex:
+            pass
+        return raw
+
     def recv(self) -> None:
         while self.NSD:
             self.recvLock.acquire()
             self.s.setblocking(False)
             try:
-                raw = self.s.recv(8192)
+                raw = self.recv_b()
                 if raw != b"\x00\x00\x00\x00":
                     try:
                         message = SIPMessage(raw)
@@ -86,7 +116,7 @@ class SIPClient:
             except SIPParseError as e:
                 if "SIP Version" in str(e):
                     request = self.gen_sip_version_not_supported(message)
-                    self.out.sendto(request.encode("utf8"), (self.server, self.port))
+                    self.send_b(request)
                 else:
                     debug(f"SIPParseError in SIP.recv: {type(e)}, {e}")
             except Exception as e:
@@ -125,9 +155,8 @@ class SIPClient:
         elif message.method == "INVITE":
             if self.call_callback is None:
                 request = self.gen_busy(message)
-                self.out.sendto(
-                    request.encode("utf8"), message.headers["Via"]["address"]
-                )
+                # TODO what about port?
+                self.send_b(request, message.headers["Via"]["address"])
             else:
                 self.call_callback(message)
         elif message.method == "BYE":
@@ -138,28 +167,23 @@ class SIPClient:
             try:
                 # BYE comes from client cause server only acts as mediator
                 (_sender_adress, _sender_port) = message.headers["Via"][0]["address"]
-                self.out.sendto(
-                    response.encode("utf8"),
-                    (_sender_adress, int(_sender_port)),
-                )
+                self.send_b(response, _sender_adress, _sender_port)
             except Exception:
                 debug("BYE Answer failed falling back to server as target")
-                self.out.sendto(
-                    response.encode("utf8"), message.headers["Via"]["address"]
-                )
+                self.send_b(response, message.headers["Via"]["address"])
         elif message.method == "ACK":
             return
         elif message.method == "CANCEL":
             # TODO: If callCallback is None, the call doesn't exist, 481
             self.call_callback(message)  # type: ignore
             response = self.gen_ok(message)
-            self.out.sendto(response.encode("utf8"), message.headers["Via"]["address"])
+            self.send_b(response, message.headers["Via"]["address"])
         elif message.method == "OPTIONS":
             if self.call_callback:
                 response = str(self.call_callback(message))
             else:
                 response = self._gen_options_response(message)
-            self.out.sendto(response.encode("utf8"), message.headers["Via"]["address"])
+            self.send_b(response, message.headers["Via"]["address"])
         else:
             debug("TODO: Add 400 Error on non processable request")
 
@@ -753,9 +777,9 @@ class SIPClient:
         sess_id = self.sessID.next()
         invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
         self.recvLock.acquire()
-        self.out.sendto(invite.encode("utf8"), (self.server, self.port))
+        self.send_b(invite)
         debug("Invited")
-        response = SIPMessage(self.s.recv(8192))
+        response = SIPMessage(self.recv_b())
 
         while (
             response.status != SIPStatus(401)
@@ -765,21 +789,21 @@ class SIPClient:
             if not self.NSD:
                 break
             self.parse_message(response)
-            response = SIPMessage(self.s.recv(8192))
+            response = SIPMessage(self.recv_b())
 
         if response.status == SIPStatus(100) or response.status == SIPStatus(180):
             self.recvLock.release()
             return SIPMessage(invite.encode("utf8")), call_id, sess_id
         debug(f"Received Response: {response.summary()}")
         ack = self.gen_ack(response)
-        self.out.sendto(ack.encode("utf8"), (self.server, self.port))
+        self.send_b(ack)
         debug("Acknowledged")
         auth = self.gen_authorization(response)
 
         invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
         invite = invite.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
 
-        self.out.sendto(invite.encode("utf8"), (self.server, self.port))
+        self.send_b(invite)
 
         self.recvLock.release()
 
@@ -789,25 +813,21 @@ class SIPClient:
         message = self.gen_bye(request)
         # TODO: Handle bye to server vs. bye to connected client
         self.recvLock.acquire()
-        self.out.sendto(
-            message.encode("utf8"),
-            (
-                request.headers["Contact"]["host"],
-                request.headers["Contact"]["port"],
-            ),
+        self.send_b(
+            message,
+            request.headers["Contact"]["host"],
+            request.headers["Contact"]["port"],
         )
-        response = SIPMessage(self.s.recv(8192))
+        response = SIPMessage(self.recv_b())
         if response.status == SIPStatus(401):
             #  Requires password
             auth = self.gen_authorization(response)
             message = message.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
             # TODO: Handle bye to server vs. bye to connected client
-            self.out.sendto(
-                message.encode("utf8"),
-                (
-                    request.headers["Contact"]["host"],
-                    request.headers["Contact"]["port"],
-                ),
+            self.send_b(
+                message,
+                request.headers["Contact"]["host"],
+                request.headers["Contact"]["port"],
             )
         else:
             debug("Received not a 401 on bye:")
@@ -817,13 +837,13 @@ class SIPClient:
     def deregister(self) -> bool:
         self.recvLock.acquire()
         firstRequest = self.gen_first_request(deregister=True)
-        self.out.sendto(firstRequest.encode("utf8"), (self.server, self.port))
+        self.send_b(firstRequest)
 
         self.out.setblocking(False)
 
         ready = select.select([self.out], [], [], self.register_timeout)
         if ready[0]:
-            resp = self.s.recv(8192)
+            resp = self.recv_b()
         else:
             raise TimeoutError("Deregistering on SIP Server timed out")
 
@@ -833,10 +853,10 @@ class SIPClient:
         if response.status == SIPStatus(401):
             # Unauthorized, likely due to being password protected.
             regRequest = self.gen_register(response, deregister=True)
-            self.out.sendto(regRequest.encode("utf8"), (self.server, self.port))
+            self.send_b(regRequest)
             ready = select.select([self.s], [], [], self.register_timeout)
             if ready[0]:
-                resp = self.s.recv(8192)
+                resp = self.recv_b()
                 response = SIPMessage(resp)
                 if response.status == SIPStatus(401):
                     # At this point, it's reasonable to assume that
@@ -871,13 +891,13 @@ class SIPClient:
     def register(self) -> bool:
         self.recvLock.acquire()
         firstRequest = self.gen_first_request()
-        self.out.sendto(firstRequest.encode("utf8"), (self.server, self.port))
+        self.send_b(firstRequest)
 
         self.out.setblocking(False)
 
         ready = select.select([self.out], [], [], self.register_timeout)
         if ready[0]:
-            resp = self.s.recv(8192)
+            resp = self.recv_b()
         else:
             raise TimeoutError("Registering on SIP Server timed out")
 
@@ -895,10 +915,10 @@ class SIPClient:
         if response.status == SIPStatus(401):
             # Unauthorized, likely due to being password protected.
             regRequest = self.gen_register(response)
-            self.out.sendto(regRequest.encode("utf8"), (self.server, self.port))
+            self.send_b(regRequest)
             ready = select.select([self.s], [], [], self.register_timeout)
             if ready[0]:
-                resp = self.s.recv(8192)
+                resp = self.recv_b()
                 response = SIPMessage(resp)
                 response = self.trying_timeout_check(response)
                 if response.status == SIPStatus(401):
@@ -982,9 +1002,9 @@ class SIPClient:
         self.recvLock.acquire()
 
         subRequest = self.gen_subscribe(lastresponse)
-        self.out.sendto(subRequest.encode("utf8"), (self.server, self.port))
+        self.send_b(subRequest)
 
-        response = SIPMessage(self.s.recv(8192))
+        response = SIPMessage(self.recv_b())
 
         debug(f'Got response to subscribe: {str(response.heading, "utf8")}')
 
@@ -1007,6 +1027,6 @@ class SIPClient:
 
             ready = select.select([self.s], [], [], self.register_timeout)
             if ready[0]:
-                resp = self.s.recv(8192)
+                resp = self.recv_b()
             response = SIPMessage(resp)
         return response
