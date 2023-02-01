@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pyvoip"
+name = "pyVoIP"
 version = "0.1.0"
 description = "Python based VoIP library"
 authors = ["Jan Rozhon <jan.rozhon@gmail.com>"]

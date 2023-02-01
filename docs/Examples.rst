@@ -14,7 +14,7 @@ The following will create a phone that answers and automatically hangs up:
 
 .. code-block:: python
    
-  from pyVoIP.VoIP import VoIPPhone, InvalidStateError
+  from pyvoip.VoIP import VoIPPhone, InvalidStateError
 
   def answer(call):
       try:
@@ -36,7 +36,7 @@ Let's say you want to make a phone that when you call it, it plays an announceme
 
 .. code-block:: python
 
-  from pyVoIP.VoIP import VoIPPhone, InvalidStateError, CallState
+  from pyvoip.VoIP import VoIPPhone, InvalidStateError, CallState
   import time
   import wave
   
@@ -87,7 +87,7 @@ We can use the following code to create `IVR Menus <https://en.wikipedia.org/wik
 
 .. code-block:: python
 
-  from pyVoIP.VoIP import VoIPPhone, InvalidStateError, CallState
+  from pyvoip.VoIP import VoIPPhone, InvalidStateError, CallState
   import time
   import wave
   

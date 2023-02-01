@@ -6,7 +6,7 @@ The VoIP module coordinates between the SIP and RTP modules in order to create a
 Errors
 ********
 
-There are two errors under ``pyVoIP.VoIP``.
+There are two errors under ``pyvoip.VoIP``.
 
 .. _invalidstateerror:
 

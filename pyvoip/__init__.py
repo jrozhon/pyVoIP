@@ -41,7 +41,7 @@ def debug(s, e=None):
 
 
 # noqa because import will fail if debug is not defined
-from pyVoIP.proto.RTP import PayloadType  # noqa: E402
+from pyvoip.proto.RTP import PayloadType  # noqa: E402
 
 SIPCompatibleMethods = ["INVITE", "ACK", "BYE", "CANCEL", "OPTIONS"]
 SIPCompatibleVersions = ["SIP/2.0"]

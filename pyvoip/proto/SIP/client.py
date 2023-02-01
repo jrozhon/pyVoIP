@@ -9,18 +9,18 @@ from base64 import b16encode, b64encode
 from threading import Lock, Timer
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
-import pyVoIP
-from pyVoIP.lib.credentials import CredentialsManager
-from pyVoIP.lib.helpers import Counter
-from pyVoIP.proto.SIP.error import InvalidAccountInfoError, SIPParseError
-from pyVoIP.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
-from pyVoIP.sock.transport import TransportMode
+import pyvoip
+from pyvoip.lib.credentials import CredentialsManager
+from pyvoip.lib.helpers import Counter
+from pyvoip.proto.SIP.error import InvalidAccountInfoError, SIPParseError
+from pyvoip.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
+from pyvoip.sock.transport import TransportMode
 
 if TYPE_CHECKING:
-    from pyVoIP.proto import RTP
+    from pyvoip.proto import RTP
 
 
-debug = pyVoIP.debug
+debug = pyvoip.debug
 
 
 class SIPClient:
@@ -91,7 +91,7 @@ class SIPClient:
                     debug(f"SIPParseError in SIP.recv: {type(e)}, {e}")
             except Exception as e:
                 debug(f"SIP.recv error: {type(e)}, {e}\n\n{str(raw, 'utf8')}")
-                if pyVoIP.DEBUG:
+                if pyvoip.DEBUG:
                     self.s.setblocking(True)
                     self.recvLock.release()
                     raise
@@ -235,9 +235,9 @@ class SIPClient:
             + f"{request.headers['CSeq']['method']}\r\n"
         )
         response += f"Contact: {request.headers['Contact']['raw']}\r\n"
-        response += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
+        response += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
         response += 'Warning: 399 GS "Unable to accept call"\r\n'
-        response += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
+        response += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
         response += "Content-Length: 0\r\n\r\n"
 
         return response
@@ -355,10 +355,10 @@ class SIPClient:
                     response += f',opaque="{digest["opaque"]}"'
             response += "\r\n"
         elif request.authentication["method"].lower() == "basic":
-            if not pyVoIP.ALLOW_BASIC_AUTH:
+            if not pyvoip.ALLOW_BASIC_AUTH:
                 raise RuntimeError(
                     "Basic authentication is not allowed. "
-                    + "Please use pyVoIP.ALLOW_BASIC_AUTH = True to allow it, "
+                    + "Please use pyvoip.ALLOW_BASIC_AUTH = True to allow it, "
                     + "but this is not recommended."
                 )
             server = request.headers["From"]["host"]
@@ -409,10 +409,10 @@ class SIPClient:
             + ">;+sip.instance="
             + f'"<urn:uuid:{self.urnUUID}>"\r\n'
         )
-        regRequest += f'Allow: {(", ".join(pyVoIP.SIPCompatibleMethods))}\r\n'
+        regRequest += f'Allow: {(", ".join(pyvoip.SIPCompatibleMethods))}\r\n'
         regRequest += "Max-Forwards: 70\r\n"
         regRequest += "Allow-Events: org.3gpp.nwinitdereg\r\n"
-        regRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
+        regRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
         # Supported: 100rel, replaces, from-change, gruu
         regRequest += (
             "Expires: " + f"{self.default_expires if not deregister else 0}\r\n"
@@ -448,7 +448,7 @@ class SIPClient:
             + f'"<urn:uuid:{self.urnUUID}>"\r\n'
         )
         subRequest += "Max-Forwards: 70\r\n"
-        subRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
+        subRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
         subRequest += f"Expires: {self.default_expires * 2}\r\n"
         subRequest += "Event: message-summary\r\n"
         subRequest += "Accept: application/simple-message-summary"
@@ -482,10 +482,10 @@ class SIPClient:
             + ">;+sip.instance="
             + f'"<urn:uuid:{self.urnUUID}>"\r\n'
         )
-        regRequest += f'Allow: {(", ".join(pyVoIP.SIPCompatibleMethods))}\r\n'
+        regRequest += f'Allow: {(", ".join(pyvoip.SIPCompatibleMethods))}\r\n'
         regRequest += "Max-Forwards: 70\r\n"
         regRequest += "Allow-Events: org.3gpp.nwinitdereg\r\n"
-        regRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
+        regRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
         regRequest += (
             "Expires: " + f"{self.default_expires if not deregister else 0}\r\n"
         )
@@ -509,9 +509,9 @@ class SIPClient:
         )
         response += f"Contact: {request.headers['Contact']['raw']}\r\n"
         # TODO: Add Supported
-        response += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
+        response += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
         response += 'Warning: 399 GS "Unable to accept call"\r\n'
-        response += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
+        response += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
         response += "Content-Length: 0\r\n\r\n"
 
         return response
@@ -528,8 +528,8 @@ class SIPClient:
             f"CSeq: {request.headers['CSeq']['check']} "
             + f"{request.headers['CSeq']['method']}\r\n"
         )
-        okResponse += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
-        okResponse += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
+        okResponse += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+        okResponse += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
         okResponse += "Content-Length: 0\r\n\r\n"
 
         return okResponse
@@ -549,8 +549,8 @@ class SIPClient:
         )
         regRequest += f"Contact: {request.headers['Contact']['raw']}\r\n"
         # TODO: Add Supported
-        regRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
-        regRequest += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
+        regRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+        regRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
         regRequest += "Content-Length: 0\r\n\r\n"
 
         self.tagLibrary[request.headers["Call-ID"]] = tag
@@ -567,8 +567,8 @@ class SIPClient:
         # Generate body first for content length
         body = "v=0\r\n"
         # TODO: Check IPv4/IPv6
-        body += f"o=pyVoIP {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
-        body += f"s=pyVoIP {pyVoIP.__version__}\r\n"
+        body += f"o=pyvoip {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
+        body += f"s=pyvoip {pyvoip.__version__}\r\n"
         # TODO: Check IPv4/IPv6
         body += f"c=IN IP4 {self.bind_ip}\r\n"
         body += "t=0 0\r\n"
@@ -604,8 +604,8 @@ class SIPClient:
             "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
         )
         # TODO: Add Supported
-        regRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
-        regRequest += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
+        regRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+        regRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
         regRequest += "Content-Type: application/sdp\r\n"
         regRequest += f"Content-Length: {len(body)}\r\n\r\n"
         regRequest += body
@@ -624,8 +624,8 @@ class SIPClient:
         # Generate body first for content length
         body = "v=0\r\n"
         # TODO: Check IPv4/IPv6
-        body += f"o=pyVoIP {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
-        body += f"s=pyVoIP {pyVoIP.__version__}\r\n"
+        body += f"o=pyvoip {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
+        body += f"s=pyvoip {pyvoip.__version__}\r\n"
         body += f"c=IN IP4 {self.bind_ip}\r\n"  # TODO: Check IPv4/IPv6
         body += "t=0 0\r\n"
         for x in ms:
@@ -661,9 +661,9 @@ class SIPClient:
         invRequest += f"From: <sip:{self.user}@{self.bind_ip}>;tag={tag}\r\n"
         invRequest += f"Call-ID: {call_id}\r\n"
         invRequest += f"CSeq: {self.inviteCounter.next()} INVITE\r\n"
-        invRequest += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
+        invRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
         invRequest += "Content-Type: application/sdp\r\n"
-        invRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
+        invRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
         invRequest += f"Content-Length: {len(body)}\r\n\r\n"
         invRequest += body
 
@@ -692,8 +692,8 @@ class SIPClient:
         byeRequest += (
             "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
         )
-        byeRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
-        byeRequest += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
+        byeRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+        byeRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
         byeRequest += "Content-Length: 0\r\n\r\n"
 
         return byeRequest
@@ -712,7 +712,7 @@ class SIPClient:
         ackMessage += f'From: {display_name}<{_from["uri"]}>;tag={tag}\r\n'
         ackMessage += f"Call-ID: {request.headers['Call-ID']}\r\n"
         ackMessage += f"CSeq: {request.headers['CSeq']['check']} ACK\r\n"
-        ackMessage += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
+        ackMessage += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
         ackMessage += "Content-Length: 0\r\n\r\n"
 
         return ackMessage

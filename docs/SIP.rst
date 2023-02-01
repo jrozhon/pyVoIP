@@ -6,7 +6,7 @@ The SIP module receives, parses, and responds to incoming SIP requests/messages.
 Errors
 *******
 
-There are two errors under ``pyVoIP.SIP``.
+There are two errors under ``pyvoip.SIP``.
 
 .. _InvalidAccountInfoError:
 

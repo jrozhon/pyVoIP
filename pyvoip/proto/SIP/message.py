@@ -1,11 +1,11 @@
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import pyVoIP
-from pyVoIP.lib import regex
-from pyVoIP.proto.SIP.error import SIPParseError
+import pyvoip
+from pyvoip.lib import regex
+from pyvoip.proto.SIP.error import SIPParseError
 
-debug = pyVoIP.debug
+debug = pyvoip.debug
 
 
 class SIPStatus(Enum):
@@ -283,8 +283,8 @@ class SIPMessageType(IntEnum):
 
 class SIPMessage:
     def __init__(self, data: bytes):
-        self.SIPCompatibleVersions = pyVoIP.SIPCompatibleVersions
-        self.SIPCompatibleMethods = pyVoIP.SIPCompatibleMethods
+        self.SIPCompatibleVersions = pyvoip.SIPCompatibleVersions
+        self.SIPCompatibleMethods = pyvoip.SIPCompatibleMethods
         self.heading = b""
         self.type: Optional[SIPMessageType] = None
         self.status = SIPStatus(491)
@@ -354,7 +354,6 @@ class SIPMessage:
         """
 
     def parse_header(self, header: str, data: str) -> None:
-
         if header in self.compact_key.keys():
             header = self.compact_key[header]
 
@@ -397,7 +396,7 @@ class SIPMessage:
                 raise SIPParseError(
                     "Regex failed to match To/From.\n\n"
                     + "Please open a GitHub Issue at "
-                    + "https://www.github.com/tayler6000/pyVoIP "
+                    + "https://www.github.com/tayler6000/pyvoip "
                     + "and include the following:\n\n"
                     + f"{data=} {type(match)=}"
                 )
@@ -630,7 +629,7 @@ class SIPMessage:
                         "type": d[0],
                         "port": int(port),
                         "port_count": count,
-                        "protocol": pyVoIP.RTP.RTPProtocol(d[2]),
+                        "protocol": pyvoip.RTP.RTPProtocol(d[2]),
                         "methods": methods,
                         "attributes": {},
                     }
@@ -694,7 +693,7 @@ class SIPMessage:
                         or attribute == "sendonly"
                         or attribute == "inactive"
                     ):
-                        self.body["a"]["transmit_type"] = pyVoIP.RTP.TransmitType(
+                        self.body["a"]["transmit_type"] = pyvoip.RTP.TransmitType(
                             attribute
                         )  # noqa: E501
             else:

@@ -1,6 +1,6 @@
 import pytest
 
-from pyVoIP.proto.SIP import SIPMessage
+from pyvoip.proto.SIP import SIPMessage
 
 
 @pytest.mark.parametrize(

@@ -9,7 +9,7 @@ from enum import Enum
 from threading import Timer
 from typing import Callable, Dict, Optional, Union
 
-import pyVoIP
+import pyvoip
 
 __all__ = [
     "add_bytes",
@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 
-debug = pyVoIP.debug
+debug = pyvoip.debug
 
 
 def byte_to_bits(byte: bytes) -> str:
@@ -218,7 +218,7 @@ class RTPPacketManager:
 
 class RTPMessage:
     def __init__(self, data: bytes, assoc: Dict[int, PayloadType]):
-        self.RTPCompatibleVersions = pyVoIP.RTPCompatibleVersions
+        self.RTPCompatibleVersions = pyvoip.RTPCompatibleVersions
         self.assoc = assoc
         # Setting defaults to stop mypy from complaining
         self.version = 0
@@ -415,7 +415,7 @@ class RTPClient:
 
     @property
     def trans_delay_reduction(self) -> float:
-        reduction = pyVoIP.TRANSMIT_DELAY_REDUCTION + 1
+        reduction = pyvoip.TRANSMIT_DELAY_REDUCTION + 1
         return reduction if reduction else 1.0
 
     def parse_packet(self, packet: bytes) -> None:

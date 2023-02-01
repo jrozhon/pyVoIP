@@ -7,10 +7,10 @@ from enum import Enum
 from threading import Lock, Timer
 from typing import Any, Callable, Dict, List, Optional
 
-import pyVoIP
-from pyVoIP import sock
-from pyVoIP.lib.credentials import CredentialsManager
-from pyVoIP.proto import RTP, SIP
+import pyvoip
+from pyvoip import sock
+from pyvoip.lib.credentials import CredentialsManager
+from pyvoip.proto import RTP, SIP
 
 __all__ = [
     "CallState",
@@ -21,7 +21,7 @@ __all__ = [
     "VoIPPhone",
 ]
 
-debug = pyVoIP.debug
+debug = pyvoip.debug
 
 
 class InvalidRangeError(Exception):
@@ -162,7 +162,7 @@ class VoIPCall:
                 # Make sure codecs are compatible.
                 codecs = {}
                 for m in assoc:
-                    if assoc[m] in pyVoIP.RTPCompatibleCodecs:
+                    if assoc[m] in pyvoip.RTPCompatibleCodecs:
                         codecs[m] = assoc[m]
                 # TODO: If no codecs are compatible then send error to PBX.
 
@@ -432,7 +432,7 @@ class VoIPPhone:
 
     def callback(self, request: SIP.SIPMessage) -> Optional[str]:
         # debug("Callback: "+request.summary())
-        if request.type == pyVoIP.SIP.SIPMessageType.MESSAGE:
+        if request.type == pyvoip.SIP.SIPMessageType.MESSAGE:
             # debug("This is a message")
             if request.method == "INVITE":
                 self._callback_MSG_Invite(request)
@@ -603,10 +603,10 @@ class VoIPPhone:
         medias[port] = {}
         dynamic_int = 101
         for pt in payload_types:
-            if pt not in pyVoIP.RTPCompatibleCodecs:
+            if pt not in pyvoip.RTPCompatibleCodecs:
                 raise RuntimeError(
                     "Unable to make call!\n\n"
-                    + f"{pt} is not supported by pyVoIP {pyVoIP.__version__}"
+                    + f"{pt} is not supported by pyvoip {pyvoip.__version__}"
                 )
             try:
                 medias[port][int(pt)] = pt
