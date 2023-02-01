@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyVoIP"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python based VoIP library"
 authors = ["Jan Rozhon <jan.rozhon@gmail.com>"]
 readme = "README.md"
@@ -25,3 +25,6 @@ pytest = "^7.2.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry_bumpversion.file."pyvoip/__init__.py"]
+
