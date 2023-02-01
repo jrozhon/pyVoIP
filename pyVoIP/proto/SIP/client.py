@@ -682,7 +682,7 @@ class SIPClient:
         toH = f'{display_name}<{to["uri"]}>'
         if request.headers["From"]["tag"] == tag:
             byeRequest += f"From: {fromH};tag={tag}\r\n"
-            byeRequest += f"To: {to['raw']}\r\n"
+            byeRequest += f"To: {to['raw']};tag={to['tag']}\r\n"
         else:
             byeRequest += f"To: {_from['raw']}\r\n"
             byeRequest += f"From: {toH};tag={tag}\r\n"
