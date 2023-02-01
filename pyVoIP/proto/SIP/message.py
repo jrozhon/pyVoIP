@@ -1,9 +1,9 @@
 from enum import Enum, IntEnum
-from pyVoIP import regex
-from pyVoIP.SIP.error import SIPParseError
 from typing import Any, Callable, Dict, List, Optional, Union
-import pyVoIP
 
+import pyVoIP
+from pyVoIP.lib import regex
+from pyVoIP.proto.SIP.error import SIPParseError
 
 debug = pyVoIP.debug
 
@@ -48,8 +48,7 @@ class SIPStatus(Enum):
     RINGING = (
         180,
         "Ringing",
-        "Destination user agent received INVITE, "
-        + "and is alerting user of call",
+        "Destination user agent received INVITE, " + "and is alerting user of call",
     )
     FORWARDED = 181, "Call is Being Forwarded"
     QUEUED = 182, "Queued"
@@ -88,8 +87,7 @@ class SIPStatus(Enum):
     USE_PROXY = (
         305,
         "Use Proxy",
-        "You must use proxy specified in Location to "
-        + "access this resource",
+        "You must use proxy specified in Location to " + "access this resource",
     )
     ALTERNATE_SERVICE = (
         380,
@@ -190,8 +188,7 @@ class SIPStatus(Enum):
     USE_IDENTITY_HEADER = (
         428,
         "Use Identity Header",
-        "The server requires an Identity header, "
-        + "and one has not been provided.",
+        "The server requires an Identity header, " + "and one has not been provided.",
     )
     PROVIDE_REFERRER_IDENTITY = 429, "Provide Referrer Identity"
     """
@@ -372,9 +369,7 @@ class SIPMessage:
                 If no port is provided in via header assume default port.
                 Needs to be str. Check response build for better str creation
                 """
-                _port = (
-                    int(info[1].split(":")[1]) if len(_address) > 1 else 5060
-                )
+                _port = int(info[1].split(":")[1]) if len(_address) > 1 else 5060
                 _via = {"type": _type, "address": (_ip, _port)}
 
                 """
@@ -417,9 +412,7 @@ class SIPMessage:
                 uri += matches["port"]
             uri_type = matches["uri_type"]
             user = matches["user"]
-            password = (
-                matches["password"].strip(":") if matches["password"] else ""
-            )
+            password = matches["password"].strip(":") if matches["password"] else ""
             display_name = (
                 matches["display_name"].strip().strip('"')
                 if matches["display_name"]
@@ -701,9 +694,7 @@ class SIPMessage:
                         or attribute == "sendonly"
                         or attribute == "inactive"
                     ):
-                        self.body["a"][
-                            "transmit_type"
-                        ] = pyVoIP.RTP.TransmitType(
+                        self.body["a"]["transmit_type"] = pyVoIP.RTP.TransmitType(
                             attribute
                         )  # noqa: E501
             else:
@@ -732,9 +723,7 @@ class SIPMessage:
             handle(key, val)
 
     @staticmethod
-    def parse_raw_body(
-        body: bytes, handle: Callable[[str, str], None]
-    ) -> None:
+    def parse_raw_body(body: bytes, handle: Callable[[str, str], None]) -> None:
         if len(body) > 0:
             body_raw = body.split(b"\r\n")
             for x in body_raw:

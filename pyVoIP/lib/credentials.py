@@ -1,5 +1,6 @@
-from pyVoIP.types import CREDENTIALS_DICT
 from typing import Dict, Optional
+
+from pyVoIP.lib.types import CREDENTIALS_DICT
 
 
 class CredentialsManager:

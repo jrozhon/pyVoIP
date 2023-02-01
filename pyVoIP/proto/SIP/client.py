@@ -1,30 +1,23 @@
-from base64 import b16encode, b64encode
-from threading import Timer, Lock
-from typing import Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
-from pyVoIP.credentials import CredentialsManager
-from pyVoIP.SIP.message import (
-    SIPMessage,
-    SIPStatus,
-    SIPMessageType,
-)
-from pyVoIP.SIP.error import (
-    SIPParseError,
-    InvalidAccountInfoError,
-)
-from pyVoIP.sock.transport import TransportMode
-from pyVoIP.helpers import Counter
-import pyVoIP
 import hashlib
-import socket
 import random
+import select
+import socket
+import ssl
 import time
 import uuid
-import select
-import ssl
+from base64 import b16encode, b64encode
+from threading import Lock, Timer
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
+import pyVoIP
+from pyVoIP.lib.credentials import CredentialsManager
+from pyVoIP.lib.helpers import Counter
+from pyVoIP.proto.SIP.error import InvalidAccountInfoError, SIPParseError
+from pyVoIP.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
+from pyVoIP.sock.transport import TransportMode
 
 if TYPE_CHECKING:
-    from pyVoIP import RTP
+    from pyVoIP.proto import RTP
 
 
 debug = pyVoIP.debug
@@ -93,9 +86,7 @@ class SIPClient:
             except SIPParseError as e:
                 if "SIP Version" in str(e):
                     request = self.gen_sip_version_not_supported(message)
-                    self.out.sendto(
-                        request.encode("utf8"), (self.server, self.port)
-                    )
+                    self.out.sendto(request.encode("utf8"), (self.server, self.port))
                 else:
                     debug(f"SIPParseError in SIP.recv: {type(e)}, {e}")
             except Exception as e:
@@ -146,9 +137,7 @@ class SIPClient:
             response = self.gen_ok(message)
             try:
                 # BYE comes from client cause server only acts as mediator
-                (_sender_adress, _sender_port) = message.headers["Via"][0][
-                    "address"
-                ]
+                (_sender_adress, _sender_port) = message.headers["Via"][0]["address"]
                 self.out.sendto(
                     response.encode("utf8"),
                     (_sender_adress, int(_sender_port)),
@@ -164,17 +153,13 @@ class SIPClient:
             # TODO: If callCallback is None, the call doesn't exist, 481
             self.call_callback(message)  # type: ignore
             response = self.gen_ok(message)
-            self.out.sendto(
-                response.encode("utf8"), message.headers["Via"]["address"]
-            )
+            self.out.sendto(response.encode("utf8"), message.headers["Via"]["address"])
         elif message.method == "OPTIONS":
             if self.call_callback:
                 response = str(self.call_callback(message))
             else:
                 response = self._gen_options_response(message)
-            self.out.sendto(
-                response.encode("utf8"), message.headers["Via"]["address"]
-            )
+            self.out.sendto(response.encode("utf8"), message.headers["Via"]["address"])
         else:
             debug("TODO: Add 400 Error on non processable request")
 
@@ -243,9 +228,7 @@ class SIPClient:
         response += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        response += (
-            f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-        )
+        response += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
         response += f"Call-ID: {request.headers['Call-ID']}\r\n"
         response += (
             f"CSeq: {request.headers['CSeq']['check']} "
@@ -281,9 +264,7 @@ class SIPClient:
         sha512.update(data)
         return sha512.hexdigest()[:64]
 
-    def gen_digest(
-        self, request: SIPMessage, body: str = ""
-    ) -> Dict[str, str]:
+    def gen_digest(self, request: SIPMessage, body: str = "") -> Dict[str, str]:
         server = request.headers["From"]["host"]
         realm = request.authentication["realm"]
         user = request.headers["From"]["user"]
@@ -310,9 +291,7 @@ class SIPClient:
             cnonce = uuid.uuid4().hex
             if nonce not in self.nc:
                 self.nc[nonce] = Counter()
-            nc = str(
-                b16encode(self.nc[nonce].next().to_bytes(4, "big")), "utf8"
-            )
+            nc = str(b16encode(self.nc[nonce].next().to_bytes(4, "big")), "utf8")
             HA1 = f"{username}:{realm}:{password}"
             HA1 = hash_func(HA1.encode("utf8"))
             if "-sess" in algo:
@@ -384,9 +363,7 @@ class SIPClient:
                 )
             server = request.headers["From"]["host"]
             realm = request.authentication.get("realm", None)
-            credentials = self.credentials_manager.get(
-                server, realm, self.user
-            )
+            credentials = self.credentials_manager.get(server, realm, self.user)
             username = credentials["username"]
             password = credentials["password"]
             userid_pass = f"{username}:{password}".encode("utf8")
@@ -421,9 +398,7 @@ class SIPClient:
             + f"<sip:{self.user}@{self.server}>;tag="
             + f'{self.tagLibrary["register"]}\r\n'
         )
-        regRequest += (
-            f'To: "{self.user}" ' + f"<sip:{self.user}@{self.server}>\r\n"
-        )
+        regRequest += f'To: "{self.user}" ' + f"<sip:{self.user}@{self.server}>\r\n"
         regRequest += f"Call-ID: {self.gen_call_id()}\r\n"
         regRequest += f"CSeq: {self.registerCounter.next()} REGISTER\r\n"
         regRequest += (
@@ -440,8 +415,7 @@ class SIPClient:
         regRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
         # Supported: 100rel, replaces, from-change, gruu
         regRequest += (
-            "Expires: "
-            + f"{self.default_expires if not deregister else 0}\r\n"
+            "Expires: " + f"{self.default_expires if not deregister else 0}\r\n"
         )
         regRequest += "Content-Length: 0"
         regRequest += "\r\n\r\n"
@@ -496,9 +470,7 @@ class SIPClient:
             + f"<sip:{self.user}@{self.server}>;tag="
             + f'{self.tagLibrary["register"]}\r\n'
         )
-        regRequest += (
-            f'To: "{self.user}" ' + f"<sip:{self.user}@{self.server}>\r\n"
-        )
+        regRequest += f'To: "{self.user}" ' + f"<sip:{self.user}@{self.server}>\r\n"
         call_id = request.headers.get("Call-ID", self.gen_call_id())
         regRequest += f"Call-ID: {call_id}\r\n"
         regRequest += f"CSeq: {self.registerCounter.next()} REGISTER\r\n"
@@ -515,8 +487,7 @@ class SIPClient:
         regRequest += "Allow-Events: org.3gpp.nwinitdereg\r\n"
         regRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
         regRequest += (
-            "Expires: "
-            + f"{self.default_expires if not deregister else 0}\r\n"
+            "Expires: " + f"{self.default_expires if not deregister else 0}\r\n"
         )
         regRequest += self.gen_authorization(request)
         regRequest += "Content-Length: 0"
@@ -530,9 +501,7 @@ class SIPClient:
         response += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        response += (
-            f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-        )
+        response += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
         response += f"Call-ID: {request.headers['Call-ID']}\r\n"
         response += (
             f"CSeq: {request.headers['CSeq']['check']} "
@@ -553,9 +522,7 @@ class SIPClient:
         okResponse += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        okResponse += (
-            f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-        )
+        okResponse += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
         okResponse += f"Call-ID: {request.headers['Call-ID']}\r\n"
         okResponse += (
             f"CSeq: {request.headers['CSeq']['check']} "
@@ -600,9 +567,7 @@ class SIPClient:
         # Generate body first for content length
         body = "v=0\r\n"
         # TODO: Check IPv4/IPv6
-        body += (
-            f"o=pyVoIP {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
-        )
+        body += f"o=pyVoIP {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
         body += f"s=pyVoIP {pyVoIP.__version__}\r\n"
         # TODO: Check IPv4/IPv6
         body += f"c=IN IP4 {self.bind_ip}\r\n"
@@ -636,8 +601,7 @@ class SIPClient:
             + f"{request.headers['CSeq']['method']}\r\n"
         )
         regRequest += (
-            "Contact: "
-            + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
+            "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
         )
         # TODO: Add Supported
         regRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
@@ -660,9 +624,7 @@ class SIPClient:
         # Generate body first for content length
         body = "v=0\r\n"
         # TODO: Check IPv4/IPv6
-        body += (
-            f"o=pyVoIP {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
-        )
+        body += f"o=pyVoIP {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
         body += f"s=pyVoIP {pyVoIP.__version__}\r\n"
         body += f"c=IN IP4 {self.bind_ip}\r\n"  # TODO: Check IPv4/IPv6
         body += "t=0 0\r\n"
@@ -693,8 +655,7 @@ class SIPClient:
         )
         invRequest += "Max-Forwards: 70\r\n"
         invRequest += (
-            "Contact: "
-            + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
+            "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
         )
         invRequest += f"To: <sip:{number}@{self.server}>\r\n"
         invRequest += f"From: <sip:{self.user}@{self.bind_ip}>;tag={tag}\r\n"
@@ -714,9 +675,7 @@ class SIPClient:
         byeRequest = f"BYE {c} SIP/2.0\r\n"
         byeRequest += self._gen_response_via_header(request)
         _from = request.headers["From"]
-        display_name = (
-            f'"{_from["display-name"]}" ' if _from["display-name"] else ""
-        )
+        display_name = f'"{_from["display-name"]}" ' if _from["display-name"] else ""
         fromH = f'{display_name}<{_from["uri"]}>'
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
@@ -731,8 +690,7 @@ class SIPClient:
         cseq = int(request.headers["CSeq"]["check"]) + 1
         byeRequest += f"CSeq: {cseq} BYE\r\n"
         byeRequest += (
-            "Contact: "
-            + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
+            "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
         )
         byeRequest += f"User-Agent: pyVoIP {pyVoIP.__version__}\r\n"
         byeRequest += f"Allow: {(', '.join(pyVoIP.SIPCompatibleMethods))}\r\n"
@@ -750,9 +708,7 @@ class SIPClient:
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
         ackMessage += f'To: {display_name}<{to["uri"]}>;tag={to["tag"]}\r\n'
         _from = request.headers["From"]
-        display_name = (
-            f'"{_from["display-name"]}" ' if _from["display-name"] else ""
-        )
+        display_name = f'"{_from["display-name"]}" ' if _from["display-name"] else ""
         ackMessage += f'From: {display_name}<{_from["uri"]}>;tag={tag}\r\n'
         ackMessage += f"Call-ID: {request.headers['Call-ID']}\r\n"
         ackMessage += f"CSeq: {request.headers['CSeq']['check']} ACK\r\n"
@@ -795,9 +751,7 @@ class SIPClient:
         branch = "z9hG4bK" + self.gen_call_id()[0:25]
         call_id = self.gen_call_id()
         sess_id = self.sessID.next()
-        invite = self.gen_invite(
-            number, str(sess_id), ms, sendtype, branch, call_id
-        )
+        invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
         self.recvLock.acquire()
         self.out.sendto(invite.encode("utf8"), (self.server, self.port))
         debug("Invited")
@@ -813,9 +767,7 @@ class SIPClient:
             self.parse_message(response)
             response = SIPMessage(self.s.recv(8192))
 
-        if response.status == SIPStatus(100) or response.status == SIPStatus(
-            180
-        ):
+        if response.status == SIPStatus(100) or response.status == SIPStatus(180):
             self.recvLock.release()
             return SIPMessage(invite.encode("utf8")), call_id, sess_id
         debug(f"Received Response: {response.summary()}")
@@ -824,12 +776,8 @@ class SIPClient:
         debug("Acknowledged")
         auth = self.gen_authorization(response)
 
-        invite = self.gen_invite(
-            number, str(sess_id), ms, sendtype, branch, call_id
-        )
-        invite = invite.replace(
-            "\r\nContent-Length", f"\r\n{auth}Content-Length"
-        )
+        invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
+        invite = invite.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
 
         self.out.sendto(invite.encode("utf8"), (self.server, self.port))
 
@@ -852,9 +800,7 @@ class SIPClient:
         if response.status == SIPStatus(401):
             #  Requires password
             auth = self.gen_authorization(response)
-            message = message.replace(
-                "\r\nContent-Length", f"\r\n{auth}Content-Length"
-            )
+            message = message.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
             # TODO: Handle bye to server vs. bye to connected client
             self.out.sendto(
                 message.encode("utf8"),
@@ -887,9 +833,7 @@ class SIPClient:
         if response.status == SIPStatus(401):
             # Unauthorized, likely due to being password protected.
             regRequest = self.gen_register(response, deregister=True)
-            self.out.sendto(
-                regRequest.encode("utf8"), (self.server, self.port)
-            )
+            self.out.sendto(regRequest.encode("utf8"), (self.server, self.port))
             ready = select.select([self.s], [], [], self.register_timeout)
             if ready[0]:
                 resp = self.s.recv(8192)
@@ -951,9 +895,7 @@ class SIPClient:
         if response.status == SIPStatus(401):
             # Unauthorized, likely due to being password protected.
             regRequest = self.gen_register(response)
-            self.out.sendto(
-                regRequest.encode("utf8"), (self.server, self.port)
-            )
+            self.out.sendto(regRequest.encode("utf8"), (self.server, self.port))
             ready = select.select([self.s], [], [], self.register_timeout)
             if ready[0]:
                 resp = self.s.recv(8192)
@@ -1015,9 +957,7 @@ class SIPClient:
         if response.status == SIPStatus.OK:
             if self.NSD:
                 # self.subscribe(response)
-                self.registerThread = Timer(
-                    self.default_expires - 5, self.register
-                )
+                self.registerThread = Timer(self.default_expires - 5, self.register)
                 self.registerThread.name = (
                     "SIP Register CSeq: " + f"{self.registerCounter.x}"
                 )

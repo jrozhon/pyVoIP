@@ -1,15 +1,15 @@
-from enum import Enum
-from threading import Timer
-from typing import Callable, Dict, Optional, Union
 import audioop
 import io
-import pyVoIP
 import random
 import socket
 import threading
 import time
 import warnings
+from enum import Enum
+from threading import Timer
+from typing import Callable, Dict, Optional, Union
 
+import pyVoIP
 
 __all__ = [
     "add_bytes",
@@ -240,10 +240,7 @@ class RTPMessage:
         data += f"Extension: {self.extension}\n"
         data += f"CC: {self.CC}\n"
         data += f"Marker: {self.marker}\n"
-        data += (
-            f"Payload Type: {self.payload_type} "
-            + f"({self.payload_type.value})\n"
-        )
+        data += f"Payload Type: {self.payload_type} " + f"({self.payload_type.value})\n"
         data += f"Sequence Number: {self.sequence}\n"
         data += f"Timestamp: {self.timestamp}\n"
         data += f"SSRC: {self.SSRC}\n"
@@ -430,9 +427,7 @@ class RTPClient:
         elif msg.payload_type == PayloadType.EVENT:
             self.parse_telephone_event(msg)
         else:
-            raise RTPParseError(
-                "Unsupported codec (parse): " + str(msg.payload_type)
-            )
+            raise RTPParseError("Unsupported codec (parse): " + str(msg.payload_type))
 
     def encode_packet(self, payload: bytes) -> bytes:
         if self.preference == PayloadType.PCMU:
@@ -440,9 +435,7 @@ class RTPClient:
         elif self.preference == PayloadType.PCMA:
             return self.encode_pcma(payload)
         else:
-            raise RTPParseError(
-                "Unsupported codec (encode): " + str(self.preference)
-            )
+            raise RTPParseError("Unsupported codec (encode): " + str(self.preference))
 
     def parse_pcmu(self, packet: RTPMessage) -> None:
         data = audioop.ulaw2lin(packet.payload, 1)

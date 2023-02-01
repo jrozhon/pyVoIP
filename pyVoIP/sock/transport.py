@@ -1,7 +1,7 @@
-from enum import Enum
-from typing import Optional
 import socket
 import ssl
+from enum import Enum
+from typing import Optional
 
 
 class TransportMode(Enum):

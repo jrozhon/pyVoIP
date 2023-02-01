@@ -3,3 +3,4 @@ pyVoIP.egg-info
 __pycache__
 venv
 *.swp
+.mypy_cache/

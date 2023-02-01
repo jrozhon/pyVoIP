@@ -1,15 +1,16 @@
-from enum import Enum
-from pyVoIP import SIP, RTP, sock
-from pyVoIP.credentials import CredentialsManager
-from threading import Timer, Lock
-from typing import Any, Callable, Dict, List, Optional
 import audioop
 import io
-import pyVoIP
 import random
 import time
 import warnings
+from enum import Enum
+from threading import Lock, Timer
+from typing import Any, Callable, Dict, List, Optional
 
+import pyVoIP
+from pyVoIP import sock
+from pyVoIP.lib.credentials import CredentialsManager
+from pyVoIP.proto import RTP, SIP
 
 __all__ = [
     "CallState",
@@ -131,9 +132,7 @@ class VoIPCall:
                         assoc[int(x)] = p
                     except ValueError:
                         try:
-                            p = RTP.PayloadType(
-                                i["attributes"][x]["rtpmap"]["name"]
-                            )
+                            p = RTP.PayloadType(i["attributes"][x]["rtpmap"]["name"])
                             assoc[int(x)] = p
                         except ValueError:
                             # Sometimes rtpmap raise a KeyError because fmtp
@@ -153,16 +152,12 @@ class VoIPCall:
                             # fix issue 42
                             # When rtpmap is not found, also set the found
                             # element to UNKNOWN
-                            warnings.warn(
-                                f"RTP KeyError {x} not found.", stacklevel=20
-                            )
+                            warnings.warn(f"RTP KeyError {x} not found.", stacklevel=20)
                             p = RTP.PayloadType("UNKNOWN")
                             assoc[int(x)] = p
 
                 if e:
-                    raise RTP.RTPParseError(
-                        f"RTP Payload type {pt} not found."
-                    )
+                    raise RTP.RTPParseError(f"RTP Payload type {pt} not found.")
 
                 # Make sure codecs are compatible.
                 codecs = {}
@@ -172,14 +167,11 @@ class VoIPCall:
                 # TODO: If no codecs are compatible then send error to PBX.
 
                 port = self.phone.request_port()
-                self.create_rtp_clients(
-                    codecs, self.bind_ip, port, request, i["port"]
-                )
+                self.create_rtp_clients(codecs, self.bind_ip, port, request, i["port"])
         elif callstate == CallState.DIALING:
             if ms is None:
                 raise RuntimeError(
-                    "Media assignments are required when "
-                    + "initiating a call"
+                    "Media assignments are required when " + "initiating a call"
                 )
             self.ms = ms
             for m in self.ms:
@@ -241,16 +233,12 @@ class VoIPCall:
 
     def renegotiate(self, request: SIP.SIPMessage) -> None:
         m = self.gen_ms()
-        message = self.sip.gen_answer(
-            request, self.session_id, m, self.sendmode
-        )
+        message = self.sip.gen_answer(request, self.session_id, m, self.sendmode)
         self.sip.out.sendto(
             message.encode("utf8"), self.request.headers["Via"][0]["address"]
         )
         for i in request.body["m"]:
-            for ii, client in zip(
-                range(len(request.body["c"])), self.RTPClients
-            ):
+            for ii, client in zip(range(len(request.body["c"])), self.RTPClients):
                 client.out_ip = request.body["c"][ii]["address"]
                 client.out_port = i["port"] + ii  # TODO: Check IPv4/IPv6
 
@@ -258,9 +246,7 @@ class VoIPCall:
         if self.state != CallState.RINGING:
             raise InvalidStateError("Call is not ringing")
         m = self.gen_ms()
-        message = self.sip.gen_answer(
-            self.request, self.session_id, m, self.sendmode
-        )
+        message = self.sip.gen_answer(self.request, self.session_id, m, self.sendmode)
         self.sip.out.sendto(
             message.encode("utf8"), self.request.headers["Via"][0]["address"]
         )
@@ -279,9 +265,7 @@ class VoIPCall:
                     assoc[int(x)] = p
                 except ValueError:
                     try:
-                        p = RTP.PayloadType(
-                            i["attributes"][x]["rtpmap"]["name"]
-                        )
+                        p = RTP.PayloadType(i["attributes"][x]["rtpmap"]["name"])
                         assoc[int(x)] = p
                     except ValueError:
                         e = True
@@ -289,9 +273,7 @@ class VoIPCall:
             if e:
                 raise RTP.RTPParseError(f"RTP Payload type {p} not found.")
 
-            self.create_rtp_clients(
-                assoc, self.bind_ip, self.port, request, i["port"]
-            )
+            self.create_rtp_clients(assoc, self.bind_ip, self.port, request, i["port"])
 
         for x in self.RTPClients:
             x.start()
@@ -410,9 +392,7 @@ class VoIPPhone:
         rtp_port_high=20000,
     ):
         if rtp_port_low > rtp_port_high:
-            raise InvalidRangeError(
-                "'rtp_port_high' must be >= 'rtp_port_low'"
-            )
+            raise InvalidRangeError("'rtp_port_high' must be >= 'rtp_port_low'")
 
         self.rtp_port_low = rtp_port_low
         self.rtp_port_high = rtp_port_high
@@ -557,10 +537,7 @@ class VoIPPhone:
         call_id = request.headers["Call-ID"]
         if call_id not in self.calls:
             debug("Unknown/No call")
-            debug(
-                "TODO: Add 481 here as server is probably waiting for "
-                + "an ACK"
-            )
+            debug("TODO: Add 481 here as server is probably waiting for " + "an ACK")
         self.calls[call_id].not_found(request)
         debug("Terminating Call")
         ack = self.sip.gen_ack(request)
@@ -571,10 +548,7 @@ class VoIPPhone:
         call_id = request.headers["Call-ID"]
         if call_id not in self.calls:
             debug("Unkown call")
-            debug(
-                "TODO: Add 481 here as server is probably waiting for "
-                + "an ACK"
-            )
+            debug("TODO: Add 481 here as server is probably waiting for " + "an ACK")
         self.calls[call_id].unavailable(request)
         debug("Terminating Call")
         ack = self.sip.gen_ack(request)
@@ -680,9 +654,7 @@ class VoIPPhone:
             self.release_ports()
 
             if len(ports_available) == 0:
-                raise NoPortsAvailableError(
-                    "No ports were available to be assigned"
-                )
+                raise NoPortsAvailableError("No ports were available to be assigned")
 
         selection = random.choice(ports_available)
         self.assignedPorts.append(selection)

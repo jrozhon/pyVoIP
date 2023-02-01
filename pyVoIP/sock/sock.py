@@ -1,11 +1,12 @@
-from typing import Dict, List, Optional, Tuple
-from pyVoIP.types import KEY_PASSWORD, SOCKETS
-from pyVoIP.SIP import SIPMessage
-from pyVoIP.sock.transport import TransportMode
 import socket
 import sqlite3
-import threading
 import ssl
+import threading
+from typing import Dict, List, Optional, Tuple
+
+from pyVoIP.lib.types import KEY_PASSWORD, SOCKETS
+from pyVoIP.proto.SIP import SIPMessage
+from pyVoIP.sock.transport import TransportMode
 
 
 class VoIPConnection:
@@ -41,13 +42,9 @@ class VoIPSocket(threading.Thread):
         self.s = socket.socket(socket.AF_INET, mode.socket_type)
         self.server_context = None
         if mode.tls_mode:
-            self.server_context = ssl.SSLContext(
-                protocol=ssl.PROTOCOL_TLS_SERVER
-            )
+            self.server_context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_SERVER)
             if cert_file:
-                self.server_context.load_cert_chain(
-                    cert_file, key_file, key_password
-                )
+                self.server_context.load_cert_chain(cert_file, key_file, key_password)
             self.server_context.load_default_certs()
             self.s = self.server_context.wrap_socket(self.s)
 
