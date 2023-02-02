@@ -1,3 +1,4 @@
+import json
 from enum import Enum, IntEnum
 from typing import Any, Callable, Optional
 
@@ -314,23 +315,22 @@ class SIPMessage:
         self.parse(data)
 
     def summary(self) -> str:
-        data = ""
         if self.type == SIPMessageType.RESPONSE:
-            data += f"Status: {int(self.status)} {self.status.phrase}\n\n"
+            fl = f"Status: {int(self.status)} {self.status.phrase}"
         else:
-            data += f"Method: {self.method}\n\n"
-        data += "Headers:\n"
-        for x in self.headers:
-            data += f"{x}: {self.headers[x]}\n"
-        data += "\n"
-        data += "Body:\n"
-        for x in self.body:
-            data += f"{x}: {self.body[x]}\n"
-        data += "\n"
-        data += "Raw:\n"
-        data += str(self.raw)
+            fl = f"Method: {self.method}"
 
-        return data
+        s = (
+            "First Line:\n"
+            f"{fl}\n\n"
+            "Header fields:\n"
+            f"{json.dumps(self.headers, indent=2)}\n\n"
+            "Body:\n"
+            f"{self.body}\n\n"
+            "Raw:\n"
+            f"{self.raw}\n\n"
+        )
+        return s
 
     def __str__(self) -> str:
         e = jinja2.Environment()
