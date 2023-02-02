@@ -9,6 +9,8 @@ from base64 import b16encode, b64encode
 from threading import Lock, Timer
 from typing import TYPE_CHECKING, Callable, Optional
 
+from rich import print
+
 import pyvoip
 from pyvoip.lib.credentials import Credentials
 from pyvoip.lib.helpers import Counter
@@ -80,7 +82,12 @@ class SIPClient:
         print(f"----> {dst}:{dst_port}")
         print(message, end="\n")
 
-        self.out.sendto(message.encode("utf8"), (dst, dst_port))
+        try:
+            self.out.sendto(message.encode("utf8"), (dst, dst_port))
+        except socket.timeout:
+            print("Socket timeout on send_b")
+        except socket.gaierror:
+            print("Error while Getting Address Info on send_b")
 
     def recv_b(self, buffsize: int = 8192) -> bytes:
         """
@@ -297,7 +304,7 @@ class SIPClient:
         password = self.credentials.password
         nonce = request.authentication["nonce"]
         method = request.headers["CSeq"]["method"]
-        uri = f"sip:{self.server};transport={self.transport_mode}"
+        uri = f"sip:{self.server}"  # ;transport={self.transport_mode}"
         algo = request.authentication.get("algorithm", "md5").lower()
         if algo in ["sha512-256", "sha512-256-sess"]:
             hash_func = self._hash_sha512_256
