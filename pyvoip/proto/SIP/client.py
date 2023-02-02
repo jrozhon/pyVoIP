@@ -129,7 +129,7 @@ class SIPClient:
             self.recvLock.release()
 
     def parse_message(self, message: SIPMessage) -> None:
-        if message.type != SIPMessageType.MESSAGE:
+        if message.type != SIPMessageType.REQUEST:
             if message.status == SIPStatus.OK:
                 if self.call_callback is not None:
                     self.call_callback(message)

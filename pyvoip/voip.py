@@ -426,7 +426,7 @@ class VoIPPhone:
 
     def callback(self, request: SIP.SIPMessage) -> Optional[str]:
         # debug("Callback: "+request.summary())
-        if request.type == pyvoip.SIP.SIPMessageType.MESSAGE:
+        if request.type == pyvoip.proto.SIP.SIPMessageType.REQUEST:
             # debug("This is a message")
             if request.method == "INVITE":
                 self._callback_MSG_Invite(request)

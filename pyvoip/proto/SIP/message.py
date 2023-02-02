@@ -277,7 +277,7 @@ class SIPMessageType(IntEnum):
         obj._value_ = value
         return obj
 
-    MESSAGE = 1
+    REQUEST = 1
     RESPONSE = 0
 
 
@@ -344,7 +344,7 @@ class SIPMessage:
             self.type = SIPMessageType.RESPONSE
             self.parse_sip_response(data)
         else:  # elif check in self.SIPCompatibleMethods:
-            self.type = SIPMessageType.MESSAGE
+            self.type = SIPMessageType.REQUEST
             self.parse_sip_message(data)
         """
         else:
