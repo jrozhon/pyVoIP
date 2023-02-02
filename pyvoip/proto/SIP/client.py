@@ -10,7 +10,7 @@ from threading import Lock, Timer
 from typing import TYPE_CHECKING, Callable, Optional
 
 import pyvoip
-from pyvoip.lib.credentials import CredentialsManager
+from pyvoip.lib.credentials import Credentials
 from pyvoip.lib.helpers import Counter
 from pyvoip.proto.SIP.error import InvalidAccountInfoError, SIPParseError
 from pyvoip.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
@@ -29,9 +29,9 @@ class SIPClient:
         server: str,
         port: int,
         user: str,
-        credentials_manager: CredentialsManager,
-        bind_ip="0.0.0.0",
-        bind_port=5060,
+        credentials: Credentials,
+        bind_ip: str = "0.0.0.0",
+        bind_port: int = 5060,
         call_callback: Optional[Callable[[SIPMessage], Optional[str]]] = None,
         transport_mode: TransportMode = TransportMode.UDP,
     ):
@@ -42,7 +42,7 @@ class SIPClient:
         self.bind_ip = bind_ip
         self.bind_port = bind_port
         self.user = user
-        self.credentials_manager = credentials_manager
+        self.credentials = credentials
         self.transport_mode = transport_mode
 
         self.call_callback = call_callback
@@ -293,9 +293,8 @@ class SIPClient:
         server = request.headers["From"]["host"]
         realm = request.authentication["realm"]
         user = request.headers["From"]["user"]
-        credentials = self.credentials_manager.get(server, realm, user)
-        username = credentials["username"]
-        password = credentials["password"]
+        username = self.credentials.auth_user
+        password = self.credentials.password
         nonce = request.authentication["nonce"]
         method = request.headers["CSeq"]["method"]
         uri = f"sip:{self.server};transport={self.transport_mode}"
@@ -388,9 +387,8 @@ class SIPClient:
                 )
             server = request.headers["From"]["host"]
             realm = request.authentication.get("realm", None)
-            credentials = self.credentials_manager.get(server, realm, self.user)
-            username = credentials["username"]
-            password = credentials["password"]
+            username = self.credentials.auth_user
+            password = self.credentials.password
             userid_pass = f"{username}:{password}".encode("utf8")
             encoded = str(b64encode(userid_pass), "utf8")
             response = f"Authorization: Basic {encoded}\r\n"

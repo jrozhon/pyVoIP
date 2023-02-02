@@ -9,7 +9,7 @@ from threading import Lock, Timer
 from typing import Any, Callable, Dict, List, Optional
 
 import pyvoip
-from pyvoip.lib.credentials import CredentialsManager
+from pyvoip.lib.credentials import Credentials, CredentialsManager
 from pyvoip.proto import RTP, SIP
 from pyvoip.sock.transport import TransportMode
 
@@ -378,7 +378,9 @@ class VoIPPhone:
         server: str,
         port: int,
         user: str,
-        credentials_manager: CredentialsManager,
+        password: str,
+        auth_user: str | None = None,
+        realm: str | None = None,
         bind_ip="0.0.0.0",
         bind_port=5060,
         transport_mode=TransportMode.UDP,
@@ -403,7 +405,13 @@ class VoIPPhone:
         self.bind_ip = bind_ip
         self.bind_port = bind_port
         self.user = user
-        self.credentials_manager = credentials_manager
+        self.credentials = Credentials(
+            user=user,
+            auth_user=auth_user or user,
+            password=password,
+            realm=realm,
+            server=server,
+        )
         self.call_callback = call_callback
         self._status = PhoneStatus.INACTIVE
         self.transport_mode = transport_mode
@@ -420,7 +428,7 @@ class VoIPPhone:
             server,
             port,
             user,
-            credentials_manager,
+            self.credentials,
             bind_ip=self.bind_ip,
             bind_port=bind_port,
             call_callback=self.callback,

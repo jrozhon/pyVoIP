@@ -6,7 +6,7 @@ import jinja2
 import pyvoip
 from pyvoip.lib import regex
 from pyvoip.proto.SIP.error import SIPParseError
-from pyvoip.templates.sip import SIPMessageTemplate
+from pyvoip.templates.sip import SIPHeaderTemplate
 
 debug = pyvoip.debug
 
@@ -335,9 +335,9 @@ class SIPMessage:
     def __str__(self) -> str:
         e = jinja2.Environment()
         t = e.from_string(
-            SIPMessageTemplate.RESPONSE
+            SIPHeaderTemplate.RESPONSE
             if self.type == SIPMessageType.RESPONSE
-            else SIPMessageTemplate.REQUEST
+            else SIPHeaderTemplate.REQUEST
         )
         return t.render(
             # TODO this is only a boilerplate and needs to be finished
