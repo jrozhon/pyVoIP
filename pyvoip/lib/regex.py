@@ -7,7 +7,6 @@ once on startup, then used directly later by other modules.
 """
 import re
 
-
 Match = re.Match
 
 AUTH_MATCH = re.compile(r'(\w+)=("[^"]+"|[^ \t,]+)')

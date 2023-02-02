@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Optional
 
 from pyvoip.lib.pyvoip_types import CREDENTIALS_DICT
 
@@ -33,7 +33,7 @@ class CredentialsManager:
             "password": password,
         }
 
-    def get(self, server: str, realm: str, user: str) -> Dict[str, str]:
+    def get(self, server: str, realm: str, user: str) -> dict[str, str]:
         """
         Lookup a username and password for a server, realm, and/or user.
         """

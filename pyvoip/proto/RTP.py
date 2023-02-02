@@ -7,7 +7,7 @@ import time
 import warnings
 from enum import Enum
 from threading import Timer
-from typing import Callable, Dict, Optional, Union
+from typing import Callable, Optional
 
 import pyvoip
 
@@ -69,7 +69,7 @@ class TransmitType(Enum):
 class PayloadType(Enum):
     def __new__(
         cls,
-        value: Union[int, str],
+        value: int | str,
         clock: int = 0,
         channel: int = 0,
         description: str = "",
@@ -217,7 +217,7 @@ class RTPPacketManager:
 
 
 class RTPMessage:
-    def __init__(self, data: bytes, assoc: Dict[int, PayloadType]):
+    def __init__(self, data: bytes, assoc: dict[int, PayloadType]):
         self.RTPCompatibleVersions = pyvoip.RTPCompatibleVersions
         self.assoc = assoc
         # Setting defaults to stop mypy from complaining
@@ -290,7 +290,7 @@ class RTPMessage:
 class RTPClient:
     def __init__(
         self,
-        assoc: Dict[int, PayloadType],
+        assoc: dict[int, PayloadType],
         in_ip: str,
         in_port: int,
         out_ip: str,

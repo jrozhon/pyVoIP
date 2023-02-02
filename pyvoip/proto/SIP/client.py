@@ -7,7 +7,7 @@ import time
 import uuid
 from base64 import b16encode, b64encode
 from threading import Lock, Timer
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Optional
 
 import pyvoip
 from pyvoip.lib.credentials import CredentialsManager
@@ -46,7 +46,7 @@ class SIPClient:
 
         self.call_callback = call_callback
 
-        self.tags: List[str] = []
+        self.tags: list[str] = []
         self.tagLibrary = {"register": self.gen_tag()}
 
         self.default_expires = 120
@@ -60,7 +60,7 @@ class SIPClient:
         self.sessID = Counter()
 
         self.urnUUID = self.gen_urn_uuid()
-        self.nc: Dict[str, Counter] = {}
+        self.nc: dict[str, Counter] = {}
 
         self.registerThread: Optional[Timer] = None
         self.recvLock = Lock()
@@ -288,7 +288,7 @@ class SIPClient:
         sha512.update(data)
         return sha512.hexdigest()[:64]
 
-    def gen_digest(self, request: SIPMessage, body: str = "") -> Dict[str, str]:
+    def gen_digest(self, request: SIPMessage, body: str = "") -> dict[str, str]:
         server = request.headers["From"]["host"]
         realm = request.authentication["realm"]
         user = request.headers["From"]["user"]
@@ -585,7 +585,7 @@ class SIPClient:
         self,
         request: SIPMessage,
         sess_id: str,
-        ms: Dict[int, Dict[int, "RTP.PayloadType"]],
+        ms: dict[int, dict[int, "RTP.PayloadType"]],
         sendtype: "RTP.TransmitType",
     ) -> str:
         # Generate body first for content length
@@ -640,7 +640,7 @@ class SIPClient:
         self,
         number: str,
         sess_id: str,
-        ms: Dict[int, Dict[int, "RTP.PayloadType"]],
+        ms: dict[int, dict[int, "RTP.PayloadType"]],
         sendtype: "RTP.TransmitType",
         branch: str,
         call_id: str,
@@ -769,9 +769,9 @@ class SIPClient:
     def invite(
         self,
         number: str,
-        ms: Dict[int, Dict[int, "RTP.PayloadType"]],
+        ms: dict[int, dict[int, "RTP.PayloadType"]],
         sendtype: "RTP.TransmitType",
-    ) -> Tuple[SIPMessage, str, int]:
+    ) -> tuple[SIPMessage, str, int]:
         branch = "z9hG4bK" + self.gen_call_id()[0:25]
         call_id = self.gen_call_id()
         sess_id = self.sessID.next()

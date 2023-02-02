@@ -1,5 +1,5 @@
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Optional
 
 import pyvoip
 from pyvoip.lib import regex
@@ -288,9 +288,9 @@ class SIPMessage:
         self.heading = b""
         self.type: Optional[SIPMessageType] = None
         self.status = SIPStatus(491)
-        self.headers: Dict[str, Any] = {"Via": []}
-        self.body: Dict[str, Any] = {}
-        self.authentication: Dict[str, Union[str, List[str]]] = {}
+        self.headers: dict[str, Any] = {"Via": []}
+        self.body: dict[str, Any] = {}
+        self.authentication: dict[str, str | list[str]] = {}
         self.raw = data
         self.auth_match = regex.AUTH_MATCH
 
@@ -444,7 +444,7 @@ class SIPMessage:
             method = data.split(" ")[0]
             data = data.replace(f"{method} ", "")
             row_data = self.auth_match.findall(data)
-            header_data: Dict[str, Any] = {"method": method}
+            header_data: dict[str, Any] = {"method": method}
             for var, data in row_data:
                 if var == "userhash":
                     header_data[var] = (
@@ -704,9 +704,9 @@ class SIPMessage:
 
     @staticmethod
     def parse_raw_header(
-        headers_raw: List[bytes], handle: Callable[[str, str], None]
+        headers_raw: list[bytes], handle: Callable[[str, str], None]
     ) -> None:
-        headers: Dict[str, Any] = {"Via": []}
+        headers: dict[str, Any] = {"Via": []}
         # Only use first occurance of VIA header field;
         # got second VIA from Kamailio running in DOCKER
         # According to RFC 3261 these messages should be
