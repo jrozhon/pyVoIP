@@ -9,7 +9,7 @@ from threading import Lock, Timer
 from typing import Any, Callable, Dict, List, Optional
 
 import pyvoip
-from pyvoip.lib.credentials import Credentials, CredentialsManager
+from pyvoip.lib.credentials import Credentials
 from pyvoip.proto import RTP, SIP
 from pyvoip.sock.transport import TransportMode
 
