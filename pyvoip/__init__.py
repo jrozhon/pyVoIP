@@ -2,7 +2,7 @@ from rich import print
 
 __all__ = ["SIP", "RTP", "VoIP"]
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 DEBUG = False
 

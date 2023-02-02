@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyVoIP"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python based VoIP library"
 authors = ["Jan Rozhon <jan.rozhon@gmail.com>"]
 readme = "README.md"
