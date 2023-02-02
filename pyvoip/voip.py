@@ -443,7 +443,7 @@ class VoIPPhone:
             self.credentials,
             bind_ip=self.bind_ip,
             bind_port=bind_port,
-            call_callback=self.callback,
+            call_callback=self.callback,  # this is just a reference to the callback method
             transport_mode=self.transport_mode,
         )
 
