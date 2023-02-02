@@ -559,43 +559,6 @@ class SIPClient:
 
         return subRequest
 
-        # regRequest = f"REGISTER sip:{self.server} SIP/2.0\r\n"
-        # regRequest += (
-        #     "Via: SIP/2.0/"
-        #     + str(self.transport_mode)
-        #     + f" {self.bind_ip}:{self.bind_port};branch="
-        #     + f"{self.gen_branch()};rport\r\n"
-        # )
-        # regRequest += (
-        #     f'From: "{self.user}" '
-        #     + f"<sip:{self.user}@{self.server}>;tag="
-        #     + f'{self.tagLibrary["register"]}\r\n'
-        # )
-        # regRequest += f'To: "{self.user}" ' + f"<sip:{self.user}@{self.server}>\r\n"
-        # call_id = request.headers.get("Call-ID", self.gen_call_id())
-        # regRequest += f"Call-ID: {call_id}\r\n"
-        # regRequest += f"CSeq: {self.register_counter.next()} REGISTER\r\n"
-        # regRequest += (
-        #     "Contact: "
-        #     + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port};"
-        #     + "transport="
-        #     + str(self.transport_mode)
-        #     + ">;+sip.instance="
-        #     + f'"<urn:uuid:{self.urnUUID}>"\r\n'
-        # )
-        # regRequest += f'Allow: {(", ".join(pyvoip.SIPCompatibleMethods))}\r\n'
-        # regRequest += "Max-Forwards: 70\r\n"
-        # regRequest += "Allow-Events: org.3gpp.nwinitdereg\r\n"
-        # regRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        # regRequest += (
-        #     "Expires: " + f"{self.default_expires if not deregister else 0}\r\n"
-        # )
-        # regRequest += self.gen_authorization(request)
-        # regRequest += "Content-Length: 0"
-        # regRequest += "\r\n\r\n"
-        #
-        # return regRequest
-
     def gen_busy(self, request: SIPMessage) -> str:
         response = "SIP/2.0 486 Busy Here\r\n"
         response += self._gen_response_via_header(request)
