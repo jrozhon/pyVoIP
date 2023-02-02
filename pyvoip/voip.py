@@ -401,6 +401,7 @@ class VoIPPhone:
         self.server = server
         self.port = port
         self.bind_ip = bind_ip
+        self.bind_port = bind_port
         self.user = user
         self.credentials_manager = credentials_manager
         self.call_callback = call_callback
@@ -425,6 +426,22 @@ class VoIPPhone:
             call_callback=self.callback,
             transport_mode=self.transport_mode,
         )
+
+    def to_dict(self):
+        return {
+            "uuid": self.uuid,
+            "pbx_ip": self.server,
+            "pbx_port": self.port,
+            # "username": self.username,
+            # "password": self.password,
+            "bind_ip": self.bind_ip,
+            "bind_port": self.bind_port,
+            "transport_mode": self.transport_mode,
+            "rtp_port_low": self.rtp_port_low,
+            "rtp_port_high": self.rtp_port_high,
+            "status": self.get_status(),
+            "calls": len(self.calls),
+        }
 
     def callback(self, request: SIP.SIPMessage) -> Optional[str]:
         # debug("Callback: "+request.summary())
