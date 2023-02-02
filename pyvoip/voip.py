@@ -6,7 +6,7 @@ import uuid
 import warnings
 from enum import Enum
 from threading import Lock, Timer
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 import pyvoip
 from pyvoip.lib.credentials import Credentials
@@ -60,7 +60,7 @@ class VoIPCall:
         request: SIP.SIPMessage,
         session_id: int,
         bind_ip: str,
-        ms: Optional[Dict[int, RTP.PayloadType]] = None,
+        ms: Optional[dict[int, RTP.PayloadType]] = None,
         sendmode="sendonly",
     ):
         self.state = callstate
@@ -77,7 +77,7 @@ class VoIPCall:
         self.dtmfLock = Lock()
         self.dtmf = io.StringIO()
 
-        self.RTPClients: List[RTP.RTPClient] = []
+        self.RTPClients: list[RTP.RTPClient] = []
 
         self.connections = 0
         self.audioPorts = 0
@@ -181,7 +181,7 @@ class VoIPCall:
 
     def create_rtp_clients(
         self,
-        codecs: Dict[int, RTP.PayloadType],
+        codecs: dict[int, RTP.PayloadType],
         ip: str,
         port: int,
         request: SIP.SIPMessage,
@@ -218,7 +218,7 @@ class VoIPCall:
         self.dtmfLock.release()
         return packet
 
-    def gen_ms(self) -> Dict[int, Dict[int, RTP.PayloadType]]:
+    def gen_ms(self) -> dict[int, dict[int, RTP.PayloadType]]:
         """
         Generate m SDP attribute for answering originally and
         for re-negotiations.
@@ -409,8 +409,8 @@ class VoIPPhone:
         self.NSD = False
 
         self.portsLock = Lock()
-        self.assignedPorts: List[int] = []
-        self.session_ids: List[int] = []
+        self.assignedPorts: list[int] = []
+        self.session_ids: list[int] = []
 
         self.server = server
         self.port = port
@@ -432,10 +432,10 @@ class VoIPPhone:
         self.sendmode = "sendrecv"
         self.recvmode = "sendrecv"
 
-        self.calls: Dict[str, VoIPCall] = {}
-        self.threads: List[Timer] = []
+        self.calls: dict[str, VoIPCall] = {}
+        self.threads: list[Timer] = []
         # Allows you to find call ID based off thread.
-        self.threadLookup: Dict[Timer, str] = {}
+        self.threadLookup: dict[Timer, str] = {}
         self.sip = SIP.SIPClient(
             server,
             port,
@@ -653,7 +653,7 @@ class VoIPPhone:
     def call(
         self,
         number: str,
-        payload_types: Optional[List[RTP.PayloadType]] = None,
+        payload_types: Optional[list[RTP.PayloadType]] = None,
     ) -> VoIPCall:
         port = self.request_port()
         medias = {}
