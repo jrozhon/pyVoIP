@@ -164,7 +164,11 @@ class SIPClient:
             if self.call_callback is None:
                 request = self.gen_busy(message)
                 # TODO what about port?
-                self.send_b(request, message.headers["Via"]["address"])
+                self.send_b(
+                    request,
+                    message.headers["Via"][0]["address"],
+                    message.headers["Via"][0]["port"],
+                )
             else:
                 self.call_callback(message)
         elif message.method == "BYE":
@@ -174,24 +178,37 @@ class SIPClient:
             response = self.gen_ok(message)
             try:
                 # BYE comes from client cause server only acts as mediator
-                (_sender_adress, _sender_port) = message.headers["Via"][0]["address"]
-                self.send_b(response, _sender_adress, _sender_port)
+                _sender_address = message.headers["Via"][0]["address"]
+                _sender_port = message.headers["Via"][0]["port"]
+                self.send_b(response, _sender_address, _sender_port)
             except Exception:
                 debug("BYE Answer failed falling back to server as target")
-                self.send_b(response, message.headers["Via"]["address"])
+                self.send_b(
+                    response,
+                    message.headers["Via"][0]["address"],
+                    message.headers["Via"][0]["port"],
+                )
         elif message.method == "ACK":
             return
         elif message.method == "CANCEL":
             # TODO: If callCallback is None, the call doesn't exist, 481
             self.call_callback(message)  # type: ignore
             response = self.gen_ok(message)
-            self.send_b(response, message.headers["Via"]["address"])
+            self.send_b(
+                response,
+                message.headers["Via"][0]["address"],
+                message.headers["Via"][0]["port"],
+            )
         elif message.method == "OPTIONS":
             if self.call_callback:
                 response = str(self.call_callback(message))
             else:
                 response = self._gen_options_response(message)
-            self.send_b(response, message.headers["Via"]["address"])
+            self.send_b(
+                response,
+                message.headers["Via"][0]["address"],
+                message.headers["Via"][0]["port"],
+            )
         else:
             debug("TODO: Add 400 Error on non processable request")
 
@@ -530,6 +547,7 @@ class SIPClient:
         response += self._gen_response_via_header(request)
         response += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
+        print(request.summary())
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
         response += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
         response += f"Call-ID: {request.headers['Call-ID']}\r\n"

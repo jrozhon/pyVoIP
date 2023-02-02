@@ -341,34 +341,34 @@ class SIPMessage:
         )
         return t.render(
             # TODO this is only a boilerplate and needs to be finished
-            method=method or "",
-            ruri=ruri or "",
-            v_proto=via_proto or "",
-            v_addr=via_addr or "",
-            r_port=r_port or "",
-            branch=branch or "",
-            f_name=f_name or "",
-            f_user=f_user or "",
-            f_domain=f_domain or "",
-            f_tag=f_tag or "",
-            t_name=t_name or "",
-            t_user=t_user or "",
-            t_domain=t_domain or "",
-            call_id=call_id or "",
-            cseq_num=cseq_num or "",
-            subject=subject or "",
-            date=date or "",
-            c_uri=c_uri or "",
-            c_params=c_params or "",
-            expires=expires or "",
-            user_agent=user_agent or "",
-            content_type=content_type or "",
-            content_length=content_length or "",
-            body=body or "",
-            # response - specific
-            status_code=status_code or "",
-            status_phrase=status_phrase or "",
-            reason_phrase=reason_phrase or "",
+            # method=method or "",
+            # ruri=ruri or "",
+            # v_proto=via_proto or "",
+            # v_addr=via_addr or "",
+            # r_port=r_port or "",
+            # branch=branch or "",
+            # f_name=f_name or "",
+            # f_user=f_user or "",
+            # f_domain=f_domain or "",
+            # f_tag=f_tag or "",
+            # t_name=t_name or "",
+            # t_user=t_user or "",
+            # t_domain=t_domain or "",
+            # call_id=call_id or "",
+            # cseq_num=cseq_num or "",
+            # subject=subject or "",
+            # date=date or "",
+            # c_uri=c_uri or "",
+            # c_params=c_params or "",
+            # expires=expires or "",
+            # user_agent=user_agent or "",
+            # content_type=content_type or "",
+            # content_length=content_length or "",
+            # body=body or "",
+            # # response - specific
+            # status_code=status_code or "",
+            # status_phrase=status_phrase or "",
+            # reason_phrase=reason_phrase or "",
         ).replace("\n", "\r\n")
 
     def parse(self, data: bytes) -> None:
@@ -411,7 +411,7 @@ class SIPMessage:
                 Needs to be str. Check response build for better str creation
                 """
                 _port = int(info[1].split(":")[1]) if len(_address) > 1 else 5060
-                _via = {"type": _type, "address": (_ip, _port)}
+                _via = {"type": _type, "address": _ip, "port": _port}
 
                 """
                 Sets branch, maddr, ttl, received, and rport if defined

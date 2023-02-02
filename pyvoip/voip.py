@@ -235,7 +235,11 @@ class VoIPCall:
     def renegotiate(self, request: SIP.SIPMessage) -> None:
         m = self.gen_ms()
         message = self.sip.gen_answer(request, self.session_id, m, self.sendmode)
-        self.sip.send_b(message, self.request.headers["Via"][0]["address"])
+        self.sip.send_b(
+            message,
+            self.request.headers["Via"][0]["address"],
+            self.request.headers["Via"][0]["port"],
+        )
         for i in request.body["m"]:
             for ii, client in zip(range(len(request.body["c"])), self.RTPClients):
                 client.out_ip = request.body["c"][ii]["address"]
@@ -246,7 +250,11 @@ class VoIPCall:
             raise InvalidStateError("Call is not ringing")
         m = self.gen_ms()
         message = self.sip.gen_answer(self.request, self.session_id, m, self.sendmode)
-        self.sip.send_b(message, self.request.headers["Via"][0]["address"])
+        self.sip.send_b(
+            message,
+            self.request.headers["Via"][0]["address"],
+            self.request.headers["Via"][0]["port"],
+        )
         self.state = CallState.ANSWERED
 
     def answered(self, request: SIP.SIPMessage) -> None:
@@ -331,7 +339,11 @@ class VoIPCall:
         if self.state != CallState.RINGING:
             raise InvalidStateError("Call is not ringing")
         message = self.sip.gen_busy(self.request)
-        self.sip.send_b(message, self.request.headers["Via"][0]["address"])
+        self.sip.send_b(
+            message,
+            self.request.headers["Via"][0]["address"],
+            self.request.headers["Via"][0]["port"],
+        )
         for x in self.RTPClients:
             x.stop()
         self.state = CallState.ENDED
@@ -435,13 +447,22 @@ class VoIPPhone:
             transport_mode=self.transport_mode,
         )
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
+        """
+        A simple method to print user-friendly information about the phone.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary containing the phone's information.
+        """
         return {
             "uuid": self.uuid,
             "pbx_ip": self.server,
             "pbx_port": self.port,
-            # "username": self.username,
-            # "password": self.password,
+            "user": self.user,
+            "auth_user": self.credentials.auth_user,
+            "password": self.credentials.password,
             "bind_ip": self.bind_ip,
             "bind_port": self.bind_port,
             "transport_mode": self.transport_mode,
@@ -452,6 +473,22 @@ class VoIPPhone:
         }
 
     def callback(self, request: SIP.SIPMessage) -> Optional[str]:
+        """
+        A mysterious method that returns or not
+
+        [TODO:description]
+
+        Parameters
+        ----------
+        request
+            [TODO:description]
+
+        Returns
+        -------
+        Optional[str]
+            [TODO:description]
+        """
+
         # debug("Callback: "+request.summary())
         if request.type == pyvoip.proto.SIP.SIPMessageType.REQUEST:
             # debug("This is a message")
@@ -489,7 +526,11 @@ class VoIPPhone:
             return  # Raise Error
         if self.call_callback is None:
             message = self.sip.gen_busy(request)
-            self.sip.send_b(message, request.headers["Via"][0]["address"])
+            self.sip.send_b(
+                message,
+                request.headers["Via"][0]["address"],
+                request.headers["Via"][0]["port"],
+            )
         else:
             debug("New call!")
             sess_id = None
@@ -499,7 +540,11 @@ class VoIPPhone:
                     self.session_ids.append(proposed)
                     sess_id = proposed
             message = self.sip.gen_ringing(request)
-            self.sip.send_b(message, request.headers["Via"][0]["address"])
+            self.sip.send_b(
+                message,
+                request.headers["Via"][0]["address"],
+                request.headers["Via"][0]["port"],
+            )
             self._create_Call(request, sess_id)
             try:
                 t = Timer(1, self.call_callback, [self.calls[call_id]])
@@ -509,7 +554,11 @@ class VoIPPhone:
                 self.threadLookup[t] = call_id
             except Exception:
                 message = self.sip.gen_busy(request)
-                self.sip.send_b(message, request.headers["Via"][0]["address"])
+                self.sip.send_b(
+                    message,
+                    request.headers["Via"][0]["address"],
+                    request.headers["Via"][0]["port"],
+                )
                 raise
 
     def _callback_MSG_Bye(self, request: SIP.SIPMessage) -> None:
