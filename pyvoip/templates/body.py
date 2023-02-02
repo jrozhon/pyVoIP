@@ -1,4 +1,4 @@
-SDP = """\
+BODY_SDP = """\
 v=0
 o={{ sdp_user }} {{ sdp_sess_id }} {{ sdp_sess_version }} IN {{ sdp_af }} {{ local_ip }}
 s=call
