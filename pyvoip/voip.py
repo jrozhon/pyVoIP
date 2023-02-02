@@ -2,6 +2,7 @@ import audioop
 import io
 import random
 import time
+import uuid
 import warnings
 from enum import Enum
 from threading import Lock, Timer
@@ -388,6 +389,7 @@ class VoIPPhone:
         if rtp_port_low > rtp_port_high:
             raise InvalidRangeError("'rtp_port_high' must be >= 'rtp_port_low'")
 
+        self.uuid = uuid.uuid4()  # used to reference the phone in external systems
         self.rtp_port_low = rtp_port_low
         self.rtp_port_high = rtp_port_high
         self.NSD = False

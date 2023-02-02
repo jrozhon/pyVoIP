@@ -35,6 +35,7 @@ class SIPClient:
         call_callback: Optional[Callable[[SIPMessage], Optional[str]]] = None,
         transport_mode: TransportMode = TransportMode.UDP,
     ):
+        self.uuid = uuid.uuid4()
         self.NSD = False
         self.server = server
         self.port = port
