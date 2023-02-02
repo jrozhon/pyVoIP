@@ -1,9 +1,12 @@
 from enum import Enum, IntEnum
 from typing import Any, Callable, Optional
 
+import jinja2
+
 import pyvoip
 from pyvoip.lib import regex
 from pyvoip.proto.SIP.error import SIPParseError
+from pyvoip.templates.sip import SIPMessageTemplate
 
 debug = pyvoip.debug
 
@@ -329,6 +332,45 @@ class SIPMessage:
 
         return data
 
+    def __str__(self) -> str:
+        e = jinja2.Environment()
+        t = e.from_string(
+            SIPMessageTemplate.RESPONSE
+            if self.type == SIPMessageType.RESPONSE
+            else SIPMessageTemplate.REQUEST
+        )
+        return t.render(
+            # TODO this is only a boilerplate and needs to be finished
+            method=method or "",
+            ruri=ruri or "",
+            v_proto=via_proto or "",
+            v_addr=via_addr or "",
+            r_port=r_port or "",
+            branch=branch or "",
+            f_name=f_name or "",
+            f_user=f_user or "",
+            f_domain=f_domain or "",
+            f_tag=f_tag or "",
+            t_name=t_name or "",
+            t_user=t_user or "",
+            t_domain=t_domain or "",
+            call_id=call_id or "",
+            cseq_num=cseq_num or "",
+            subject=subject or "",
+            date=date or "",
+            c_uri=c_uri or "",
+            c_params=c_params or "",
+            expires=expires or "",
+            user_agent=user_agent or "",
+            content_type=content_type or "",
+            content_length=content_length or "",
+            body=body or "",
+            # response - specific
+            status_code=status_code or "",
+            status_phrase=status_phrase or "",
+            reason_phrase=reason_phrase or "",
+        ).replace("\n", "\r\n")
+
     def parse(self, data: bytes) -> None:
         try:
             headers, body = data.split(b"\r\n\r\n")
@@ -345,7 +387,7 @@ class SIPMessage:
             self.parse_sip_response(data)
         else:  # elif check in self.SIPCompatibleMethods:
             self.type = SIPMessageType.REQUEST
-            self.parse_sip_message(data)
+            self.parse_sip_request(data)
         """
         else:
             raise SIPParseError(
@@ -629,7 +671,7 @@ class SIPMessage:
                         "type": d[0],
                         "port": int(port),
                         "port_count": count,
-                        "protocol": pyvoip.RTP.RTPProtocol(d[2]),
+                        "protocol": pyvoip.proto.RTP.RTPProtocol(d[2]),
                         "methods": methods,
                         "attributes": {},
                     }
@@ -745,7 +787,7 @@ class SIPMessage:
 
         self.parse_raw_body(body, self.parse_body)
 
-    def parse_sip_message(self, data: bytes) -> None:
+    def parse_sip_request(self, data: bytes) -> None:
         headers, body = data.split(b"\r\n\r\n")
 
         headers_raw = headers.split(b"\r\n")
