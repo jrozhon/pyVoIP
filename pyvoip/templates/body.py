@@ -1,4 +1,8 @@
-BODY_SDP = """\
+from enum import Enum
+
+
+class SIPBodyTeplate(Enum):
+    SDP = """\
 v=0
 o={{ sdp_user }} {{ sdp_sess_id }} {{ sdp_sess_version }} IN {{ sdp_af }} {{ local_ip }}
 s=call
@@ -10,6 +14,8 @@ a=rtpmap:8 pcma/8000
 a=rtpmap:101 telephone-event/8000
 a=sendrecv
 """
+
+
 # a=ptime:20
 # a=fmtp:101 0-15
 # a=rtcp:{{ sdp_rtcp_port }}
@@ -27,4 +33,4 @@ a=sendrecv
 # a=ssrc:{{ ssrc }} mslabel:{{ msid }}
 # a=ssrc:{{ ssrc }} label:{{ msid }}
 if __name__ == "__main__":
-    print(SDP)
+    print(SIPBodyTeplate.SDP.value)

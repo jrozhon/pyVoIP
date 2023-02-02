@@ -1,4 +1,8 @@
-SIP_REQUEST = """\
+from enum import Enum
+
+
+class SIPHeaderTemplate(Enum):
+    REQUEST = """\
 {{ method }} {{ ruri }} SIP/2.0
 Via: SIP/2.0/{{ via_proto }} {{ via_addr }}{{ r_port }};branch=z9hG4bKSG.{{ via_branch }}
 From: {% if f_name %}"{{ f_name }}" {% endif %}<sip:{% if f_user %}{{ f_user }}@{% endif %}{{ f_domain }}>;tag={{ from_tag }}
@@ -14,8 +18,7 @@ CSeq: {{ cseq_num }} {{ method }}
 {%- if content_length %}{{"\n"}}Content-Length: {{ content_length }}{% endif %}
 {%- if body %}{{"\n"}}{{ body }}{% endif %}
 """
-
-SIP_RESPONSE = """\
+    RESPONSE = """\
 SIP/2.0 {{ status_code }} {{ status_message }}
 Via: SIP/2.0/{{ via_proto }} {{ via_addr }}{{ r_port }};branch=z9hG4bKSG.{{ via_branch }}
 From: {% if f_name %}"{{ f_name }}" {% endif %}<sip:{% if f_user %}{{ f_user }}@{% endif %}{{ f_domain }}>;tag={{ from_tag }}
@@ -32,6 +35,7 @@ CSeq: {{ cseq_num }} {{ method }}
 {%- if body %}{{{"\n\n"}}{ body }}{% endif %}
 """
 
+
 if __name__ == "__main__":
-    print(SIP_REQUEST)
-    print(SIP_RESPONSE)
+    print(SIPHeaderTemplate.REQUEST.value)
+    print(SIPHeaderTemplate.RESPONSE.value)
