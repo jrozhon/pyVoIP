@@ -17,6 +17,7 @@ from pyvoip.lib.helpers import Counter
 from pyvoip.proto.SIP.error import InvalidAccountInfoError, SIPParseError
 from pyvoip.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
 from pyvoip.sock.transport import TransportMode
+from pyvoip.templates.body import SIPBodyTemplate
 from pyvoip.templates.sip import SIPHeaderTemplate
 
 if TYPE_CHECKING:
@@ -51,8 +52,37 @@ def fmt(msg_type: SIPMessageType, vars: dict[str, Any]) -> str:
         if msg_type == SIPMessageType.REQUEST
         else SIPHeaderTemplate.RESPONSE.value
     )
-    msg = t.render(**vars).strip().replace("\n", "\r\n")
+    msg = t.render(**vars).lstrip().replace("\n", "\r\n")
     print("Call of fmt function. Rendered msg:")
+    print(msg)
+    return msg
+
+
+def fmt_body(vars: dict[str, Any], body_type: str = "SDP") -> str:
+    """
+    A temporary function to allow migration to templates.
+
+    Parameters
+    ----------
+    body_type
+        A flag specifying which template to use.
+    vars
+        A dictionary of variables to be used in the template.
+
+    Returns
+    -------
+    str
+        The rendered template.
+    """
+
+    import jinja2
+
+    e = jinja2.Environment()
+    t = e.from_string(SIPBodyTemplate[body_type].value)
+    # do not replace newlines here as they are going to
+    # be replaced in fmt function.
+    msg = t.render(**vars).lstrip()
+    print("Call of fmt_body function. Rendered msg:")
     print(msg)
     return msg
 
@@ -113,6 +143,7 @@ class SIPClient:
 
         print(f"----> {dst}:{dst_port}")
         print(message, end="\n")
+        # print(message.encode("utf8"), end="\n")
 
         try:
             self.out.sendto(message.encode("utf8"), (dst, dst_port))
@@ -684,54 +715,64 @@ class SIPClient:
         sendtype: "RTP.TransmitType",
         branch: str,
         call_id: str,
+        response: SIPMessage | None = None,
     ) -> str:
-        # Generate body first for content length
-        body = "v=0\r\n"
-        # TODO: Check IPv4/IPv6
-        body += f"o=pyvoip {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
-        body += f"s=pyvoip {pyvoip.__version__}\r\n"
-        body += f"c=IN IP4 {self.bind_ip}\r\n"  # TODO: Check IPv4/IPv6
-        body += "t=0 0\r\n"
-        for x in ms:
-            # TODO: Check AVP mode from request
-            body += f"m=audio {x} RTP/AVP"
-            for m in ms[x]:
-                body += f" {m}"
-        body += "\r\n"  # m=audio <port> RTP/AVP <codecs>\r\n
-        for x in ms:
-            for m in ms[x]:
-                body += f"a=rtpmap:{m} {ms[x][m]}/{ms[x][m].rate}\r\n"
-                if str(ms[x][m]) == "telephone-event":
-                    body += f"a=fmtp:{m} 0-15\r\n"
-        body += "a=ptime:20\r\n"
-        body += "a=maxptime:150\r\n"
-        body += f"a={sendtype}\r\n"
-
         tag = self.gen_tag()
         self.tagLibrary[call_id] = tag
 
-        invRequest = f"INVITE sip:{number}@{self.server} SIP/2.0\r\n"
-        invRequest += (
-            "Via: SIP/2.0/"
-            + str(self.transport_mode)
-            + f" {self.bind_ip}:{self.bind_port};branch="
-            + f"{branch}\r\n"
+        # Generate body first for content length
+        body_vars = dict(
+            sdp_user="pyvoip",
+            sdp_sess_id=sess_id,
+            sdp_sess_version=int(sess_id) + 2,
+            sdp_af="IP4",
+            local_ip=self.bind_ip,
+            sdp_ms=ms,
+            sdp_direction=sendtype,
         )
-        invRequest += "Max-Forwards: 70\r\n"
-        invRequest += (
-            "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
-        )
-        invRequest += f"To: <sip:{number}@{self.server}>\r\n"
-        invRequest += f"From: <sip:{self.user}@{self.bind_ip}>;tag={tag}\r\n"
-        invRequest += f"Call-ID: {call_id}\r\n"
-        invRequest += f"CSeq: {self.invite_counter.next()} INVITE\r\n"
-        invRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-        invRequest += "Content-Type: application/sdp\r\n"
-        invRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        invRequest += f"Content-Length: {len(body)}\r\n\r\n"
-        invRequest += body
 
-        return invRequest
+        body = fmt_body(vars=body_vars)
+
+        vars = dict(
+            method="INVITE",
+            r_user=number,
+            r_domain=self.server,
+            v_proto=self.transport_mode,
+            v_addr=self.bind_ip,
+            v_port=self.bind_port,
+            rport=";rport",
+            branch=branch,  # self.gen_branch(),
+            f_name=self.user,
+            f_user=self.user,
+            f_domain=self.server,
+            f_tag=self.tagLibrary[call_id],
+            t_name=None,
+            t_user=number,
+            t_domain=self.server,
+            call_id=call_id,
+            cseq_num=self.invite_counter.next(),
+            c_user=self.user,
+            c_domain=self.bind_ip,
+            c_port=self.bind_port,
+            c_transport=self.transport_mode,
+            c_params=None,  # f'+sip.instance="<urn:uuid:{self.urnUUID}>"',
+            allow=",".join(pyvoip.SIPCompatibleMethods),
+            expires=None,  # self.default_expires if not deregister else 0,
+            user_agent=f"pyvoip {pyvoip.__version__}",
+            max_forwards=70,
+            content_type="application/sdp",
+            content_length=len(body),
+            authorization=None
+            if response is None
+            else self.gen_authorization(response)[
+                15:
+            ],  # strip Authorization:_ not to break compatibility
+            body=body,
+        )
+
+        invite_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+
+        return invite_request
 
     def gen_bye(self, request: SIPMessage) -> str:
         tag = self.tagLibrary[request.headers["Call-ID"]]
@@ -838,10 +879,10 @@ class SIPClient:
         ack = self.gen_ack(response)
         self.send_b(ack)
         debug("Acknowledged")
-        auth = self.gen_authorization(response)
 
-        invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
-        invite = invite.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
+        invite = self.gen_invite(
+            number, str(sess_id), ms, sendtype, branch, call_id, response=response
+        )
 
         self.send_b(invite)
 
@@ -892,8 +933,8 @@ class SIPClient:
 
         if response.status == SIPStatus(401):
             # Unauthorized, likely due to being password protected.
-            regRequest = self.gen_register(response, deregister=True)
-            self.send_b(regRequest)
+            register_request = self.gen_register(response, deregister=True)
+            self.send_b(register_request)
             ready = select.select([self.s], [], [], self.register_timeout)
             if ready[0]:
                 resp = self.recv_b()

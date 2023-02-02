@@ -735,7 +735,7 @@ class SIPMessage:
                         or attribute == "sendonly"
                         or attribute == "inactive"
                     ):
-                        self.body["a"]["transmit_type"] = pyvoip.RTP.TransmitType(
+                        self.body["a"]["transmit_type"] = pyvoip.proto.RTP.TransmitType(
                             attribute
                         )  # noqa: E501
             else:

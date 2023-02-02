@@ -1,18 +1,38 @@
 from enum import Enum
 
+import jinja2
 
-class SIPBodyTeplate(Enum):
+from pyvoip.proto.RTP import PayloadType, TransmitType
+
+vars = {
+    "sdp_user": "pyvoip",
+    "sdp_sess_id": "1",
+    "sdp_sess_version": 3,
+    "sdp_af": "IP4",
+    "local_ip": "10.76.100.41",
+    "sdp_ms": {
+        12047: {8: PayloadType.PCMA, 0: PayloadType.PCMU, 101: PayloadType.EVENT}
+    },
+    "sdp_direction": TransmitType.SENDRECV,
+}
+
+
+class SIPBodyTemplate(Enum):
     SDP = """\
 v=0
 o={{ sdp_user }} {{ sdp_sess_id }} {{ sdp_sess_version }} IN {{ sdp_af }} {{ local_ip }}
 s=call
 c=IN {{ sdp_af }} {{ local_ip }}
 t=0 0
-m=audio {{ sdp_rtp_port }} RTP 0 8 101
-a=rtpmap:0 pcmu/8000
-a=rtpmap:8 pcma/8000
-a=rtpmap:101 telephone-event/8000
-a=sendrecv
+{%- for sdp_rtp_port, rtp_dict in sdp_ms.items() %}
+m=audio {{ sdp_rtp_port }} RTP/AVP {% for sdp_codec_code in rtp_dict.keys() %}{{sdp_codec_code}} {% endfor %}
+{%- endfor %}
+{%- for sdp_rtp_port, rtp_dict in sdp_ms.items() %}
+{%- for sdp_codec_code,sdp_val in rtp_dict.items() %}
+a=rtpmap:{{sdp_codec_code}} {{sdp_val}}/{{sdp_val.rate}}
+{%- endfor %}
+{%- endfor %}
+a={{sdp_direction}}
 """
 
 
@@ -33,4 +53,8 @@ a=sendrecv
 # a=ssrc:{{ ssrc }} mslabel:{{ msid }}
 # a=ssrc:{{ ssrc }} label:{{ msid }}
 if __name__ == "__main__":
-    print(SIPBodyTeplate.SDP.value)
+    # print(SIPBodyTemplate.SDP.value)
+    e = jinja2.Environment()
+    t = e.from_string(SIPBodyTemplate["SDP"].value)
+    msg = t.render(**vars).lstrip().replace("\n", "\r\n")
+    print(msg)

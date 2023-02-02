@@ -13,7 +13,7 @@ CSeq: {{ cseq_num }} {{ method }}
 {%- if date %}{{"\n"}}Date: {{ date }}{% endif %}
 {%- if c_domain %}{{"\n"}}Contact: <sip:{{ c_user }}@{{ c_domain }}{% if c_port %}:{{c_port}}{% endif %}{% if c_transport %};transport={{ c_transport }}{% endif %}>{% if c_params %};{{ c_params }}{% endif %}{% endif %}
 {%- if allow %}{{"\n"}}Allow: {{ allow }}{% endif %}
-{%- if expires %}{{"\n"}}Expires: {{ expires }}{% endif %}
+{%- if expires is not none %}{{"\n"}}Expires: {{ expires }}{% endif %}
 {%- if user_agent %}{{"\n"}}User-Agent: {{ user_agent }}{% endif %}
 {%- if max_forwards %}{{"\n"}}Max-Forwards: {{ max_forwards }}{% endif %}
 {%- if content_type %}{{"\n"}}Content-Type: {{ content_type }}{% endif %}

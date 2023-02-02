@@ -658,7 +658,11 @@ class VoIPPhone:
         port = self.request_port()
         medias = {}
         if not payload_types:
-            payload_types = [RTP.PayloadType.PCMU, RTP.PayloadType.EVENT]
+            payload_types = [
+                RTP.PayloadType.PCMA,
+                RTP.PayloadType.PCMU,
+                RTP.PayloadType.EVENT,
+            ]
         medias[port] = {}
         dynamic_int = 101
         for pt in payload_types:
