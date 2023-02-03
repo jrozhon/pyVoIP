@@ -555,6 +555,102 @@ class SIPClient:
 
         return register_request
 
+    def gen_invite(
+        self,
+        number: str,
+        sess_id: str,
+        ms: dict[int, dict[int, "RTP.PayloadType"]],
+        sendtype: "RTP.TransmitType",
+        branch: str,
+        call_id: str,
+        response: SIPMessage | None = None,
+    ) -> str:
+        """
+        Same as gen_register, this method generates INVITE based on the values given
+        in vars. Ideally, these methods should converge to a single method gen_request.
+        It is not clear at this point if this generalization would be flexible enough
+        to manage all possible scenarios.
+
+        Parameters
+        ----------
+        number : str
+            Number to call. Not ideal, as it is a string. Should be renamed as there can be names as well.
+        sess_id : str
+            Session ID.
+        ms : dict
+            Dictionary of available audio media types.
+        sendtype: RTP.TransmitType
+            Type of transmission (sendrecv, sendonly, recvonly, inactive).
+        branch : str
+            Branch ID.
+        call_id : str
+            Call ID.
+        response : SIPMessage
+            The response to the previous INVITE request. If this is the first
+            INVITE request, this should be None.
+
+        Returns
+        -------
+        str
+            Formatted INVITE request.
+        """
+        tag = self.gen_tag()
+        self.tagLibrary[call_id] = tag
+
+        # Generate body first for content length
+        body_vars = dict(
+            sdp_user="pyvoip",
+            sdp_sess_id=sess_id,
+            sdp_sess_version=int(sess_id) + 2,
+            sdp_af="IP4",
+            local_ip=self.bind_ip,
+            sdp_ms=ms,
+            sdp_direction=sendtype,
+        )
+
+        body = fmt_body(vars=body_vars)
+
+        vars = dict(
+            method="INVITE",
+            r_user=number,
+            r_domain=self.server,
+            v_proto=self.transport_mode,
+            v_addr=self.bind_ip,
+            v_port=self.bind_port,
+            rport=";rport",
+            branch=branch,  # self.gen_branch(),
+            f_name=self.user,
+            f_user=self.user,
+            f_domain=self.server,
+            f_tag=self.tagLibrary[call_id],
+            t_name=None,
+            t_user=number,
+            t_domain=self.server,
+            call_id=call_id,
+            cseq_num=self.invite_counter.next(),
+            c_user=self.user,
+            c_domain=self.bind_ip,
+            c_port=self.bind_port,
+            c_transport=self.transport_mode,
+            c_params=None,  # f'+sip.instance="<urn:uuid:{self.urnUUID}>"',
+            allow=",".join(pyvoip.SIPCompatibleMethods),
+            expires=None,  # self.default_expires if not deregister else 0,
+            user_agent=f"pyvoip {pyvoip.__version__}",
+            max_forwards=70,
+            content_type="application/sdp",
+            content_length=len(body),
+            authorization=None
+            if response is None
+            else self.gen_authorization(response)[
+                15:
+            ],  # strip Authorization:_ not to break compatibility
+            body=body,
+        )
+
+        invite_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+
+        return invite_request
+
     def gen_subscribe(self, response: SIPMessage) -> str:
         subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
         subRequest += (
@@ -706,73 +802,6 @@ class SIPClient:
         regRequest += body
 
         return regRequest
-
-    def gen_invite(
-        self,
-        number: str,
-        sess_id: str,
-        ms: dict[int, dict[int, "RTP.PayloadType"]],
-        sendtype: "RTP.TransmitType",
-        branch: str,
-        call_id: str,
-        response: SIPMessage | None = None,
-    ) -> str:
-        tag = self.gen_tag()
-        self.tagLibrary[call_id] = tag
-
-        # Generate body first for content length
-        body_vars = dict(
-            sdp_user="pyvoip",
-            sdp_sess_id=sess_id,
-            sdp_sess_version=int(sess_id) + 2,
-            sdp_af="IP4",
-            local_ip=self.bind_ip,
-            sdp_ms=ms,
-            sdp_direction=sendtype,
-        )
-
-        body = fmt_body(vars=body_vars)
-
-        vars = dict(
-            method="INVITE",
-            r_user=number,
-            r_domain=self.server,
-            v_proto=self.transport_mode,
-            v_addr=self.bind_ip,
-            v_port=self.bind_port,
-            rport=";rport",
-            branch=branch,  # self.gen_branch(),
-            f_name=self.user,
-            f_user=self.user,
-            f_domain=self.server,
-            f_tag=self.tagLibrary[call_id],
-            t_name=None,
-            t_user=number,
-            t_domain=self.server,
-            call_id=call_id,
-            cseq_num=self.invite_counter.next(),
-            c_user=self.user,
-            c_domain=self.bind_ip,
-            c_port=self.bind_port,
-            c_transport=self.transport_mode,
-            c_params=None,  # f'+sip.instance="<urn:uuid:{self.urnUUID}>"',
-            allow=",".join(pyvoip.SIPCompatibleMethods),
-            expires=None,  # self.default_expires if not deregister else 0,
-            user_agent=f"pyvoip {pyvoip.__version__}",
-            max_forwards=70,
-            content_type="application/sdp",
-            content_length=len(body),
-            authorization=None
-            if response is None
-            else self.gen_authorization(response)[
-                15:
-            ],  # strip Authorization:_ not to break compatibility
-            body=body,
-        )
-
-        invite_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
-
-        return invite_request
 
     def gen_bye(self, request: SIPMessage) -> str:
         tag = self.tagLibrary[request.headers["Call-ID"]]
