@@ -8,6 +8,9 @@ from enum import Enum
 from threading import Lock, Timer
 from typing import Any, Callable, Optional
 
+from icecream import ic
+from rich import print
+
 import pyvoip
 from pyvoip.lib.credentials import Credentials
 from pyvoip.proto import RTP, SIP
@@ -23,6 +26,7 @@ __all__ = [
 ]
 
 debug = pyvoip.debug
+TRACE = pyvoip.TRACE
 
 
 class InvalidRangeError(Exception):
@@ -63,6 +67,8 @@ class VoIPCall:
         ms: Optional[dict[int, RTP.PayloadType]] = None,
         sendmode="sendonly",
     ):
+        if TRACE:
+            ic()
         self.state = callstate
         self.phone = phone
         self.sip = self.phone.sip
@@ -187,6 +193,8 @@ class VoIPCall:
         request: SIP.SIPMessage,
         baseport: int,
     ) -> None:
+        if TRACE:
+            ic()
         for ii in range(len(request.body["c"])):
             # TODO: Check IPv4/IPv6
             c = RTP.RTPClient(
@@ -205,6 +213,8 @@ class VoIPCall:
             self.phone.release_ports(call=self)
 
     def dtmf_callback(self, code: str) -> None:
+        if TRACE:
+            ic()
         self.dtmfLock.acquire()
         bufferloc = self.dtmf.tell()
         self.dtmf.seek(0, 2)
@@ -213,6 +223,8 @@ class VoIPCall:
         self.dtmfLock.release()
 
     def get_dtmf(self, length=1) -> str:
+        if TRACE:
+            ic()
         self.dtmfLock.acquire()
         packet = self.dtmf.read(length)
         self.dtmfLock.release()
@@ -223,6 +235,8 @@ class VoIPCall:
         Generate m SDP attribute for answering originally and
         for re-negotiations.
         """
+        if TRACE:
+            ic()
         # TODO: this seems "dangerous" if for some reason sip server handles 2
         # and more bindings it will cause duplicate RTP-Clients to spawn.
         m = {}
@@ -233,6 +247,8 @@ class VoIPCall:
         return m
 
     def renegotiate(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         m = self.gen_ms()
         message = self.sip.gen_answer(request, self.session_id, m, self.sendmode)
         self.sip.send_b(
@@ -246,6 +262,8 @@ class VoIPCall:
                 client.out_port = i["port"] + ii  # TODO: Check IPv4/IPv6
 
     def answer(self) -> None:
+        if TRACE:
+            ic()
         if self.state != CallState.RINGING:
             raise InvalidStateError("Call is not ringing")
         m = self.gen_ms()
@@ -258,6 +276,8 @@ class VoIPCall:
         self.state = CallState.ANSWERED
 
     def answered(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         if self.state != CallState.DIALING:
             return
 
@@ -287,6 +307,8 @@ class VoIPCall:
         self.state = CallState.ANSWERED
 
     def not_found(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         if self.state != CallState.DIALING:
             debug(
                 "TODO: 500 Error, received a not found response for a "
@@ -312,6 +334,8 @@ class VoIPCall:
         warnings.simplefilter("default")
 
     def unavailable(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         if self.state != CallState.DIALING:
             debug(
                 "TODO: 500 Error, received an unavailable response for a "
@@ -336,6 +360,8 @@ class VoIPCall:
         warnings.simplefilter("default")
 
     def deny(self) -> None:
+        if TRACE:
+            ic()
         if self.state != CallState.RINGING:
             raise InvalidStateError("Call is not ringing")
         message = self.sip.gen_busy(self.request)
@@ -350,6 +376,8 @@ class VoIPCall:
         del self.phone.calls[self.request.headers["Call-ID"]]
 
     def hangup(self) -> None:
+        if TRACE:
+            ic()
         if self.state != CallState.ANSWERED:
             raise InvalidStateError("Call is not answered")
         for x in self.RTPClients:
@@ -360,6 +388,8 @@ class VoIPCall:
             del self.phone.calls[self.request.headers["Call-ID"]]
 
     def bye(self) -> None:
+        if TRACE:
+            ic()
         if self.state == CallState.ANSWERED:
             for x in self.RTPClients:
                 x.stop()
@@ -368,10 +398,14 @@ class VoIPCall:
             del self.phone.calls[self.request.headers["Call-ID"]]
 
     def write_audio(self, data: bytes) -> None:
+        if TRACE:
+            ic()
         for x in self.RTPClients:
             x.write(data)
 
     def read_audio(self, length=160, blocking=True) -> bytes:
+        if TRACE:
+            ic()
         if len(self.RTPClients) == 1:
             return self.RTPClients[0].read(length, blocking)
         data = []
@@ -400,6 +434,8 @@ class VoIPPhone:
         rtp_port_low=10000,
         rtp_port_high=20000,
     ):
+        if TRACE:
+            ic()
         if rtp_port_low > rtp_port_high:
             raise InvalidRangeError("'rtp_port_high' must be >= 'rtp_port_low'")
 
@@ -450,6 +486,8 @@ class VoIPPhone:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        if TRACE:
+            ic()
         """
         A simple method to print user-friendly information about the phone.
 
@@ -475,6 +513,8 @@ class VoIPPhone:
         }
 
     def callback(self, request: SIP.SIPMessage) -> Optional[str]:
+        if TRACE:
+            ic()
         """
         A mysterious method that returns or not
 
@@ -510,9 +550,13 @@ class VoIPPhone:
         return None  # mypy needs this for some reason.
 
     def get_status(self) -> PhoneStatus:
+        if TRACE:
+            ic()
         return self._status
 
     def _callback_MSG_Invite(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         call_id = request.headers["Call-ID"]
         if call_id in self.calls:
             debug("Re-negotiation detected!")
@@ -564,13 +608,17 @@ class VoIPPhone:
                 raise
 
     def _callback_MSG_Bye(self, request: SIP.SIPMessage) -> None:
-        debug("BYE recieved")
+        if TRACE:
+            ic()
+        debug("BYE received")
         call_id = request.headers["Call-ID"]
         if call_id not in self.calls:
             return
         self.calls[call_id].bye()
 
     def _callback_MSG_Options(self, request: SIP.SIPMessage) -> str:
+        if TRACE:
+            ic()
         debug("Options recieved")
         response = self.sip.gen_busy(request)
         if self.call_callback:
@@ -579,6 +627,8 @@ class VoIPPhone:
         return response
 
     def _callback_RESP_OK(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         debug("OK recieved")
         call_id = request.headers["Call-ID"]
         if call_id not in self.calls:
@@ -595,6 +645,8 @@ class VoIPPhone:
         )
 
     def _callback_RESP_NotFound(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         debug("Not Found recieved, invalid number called?")
         call_id = request.headers["Call-ID"]
         if call_id not in self.calls:
@@ -606,6 +658,8 @@ class VoIPPhone:
         self.sip.send_b(ack)
 
     def _callback_RESP_Unavailable(self, request: SIP.SIPMessage) -> None:
+        if TRACE:
+            ic()
         debug("Service Unavailable recieved")
         call_id = request.headers["Call-ID"]
         if call_id not in self.calls:
@@ -617,6 +671,8 @@ class VoIPPhone:
         self.sip.send_b(ack)
 
     def _create_Call(self, request: SIP.SIPMessage, sess_id: int) -> None:
+        if TRACE:
+            ic()
         """
         Create VoIP call object. Should be separated to enable better
         subclassing.
@@ -632,6 +688,8 @@ class VoIPPhone:
         )
 
     def start(self) -> None:
+        if TRACE:
+            ic()
         self._status = PhoneStatus.REGISTERING
         try:
             self.sip.start()
@@ -644,6 +702,8 @@ class VoIPPhone:
             raise
 
     def stop(self) -> None:
+        if TRACE:
+            ic()
         self._status = PhoneStatus.DEREGISTERING
         for x in self.calls.copy():
             try:
@@ -658,6 +718,8 @@ class VoIPPhone:
         number: str,
         payload_types: Optional[list[RTP.PayloadType]] = None,
     ) -> VoIPCall:
+        if TRACE:
+            ic()
         port = self.request_port()
         medias = {}
         if not payload_types:
@@ -696,6 +758,8 @@ class VoIPPhone:
         return self.calls[call_id]
 
     def request_port(self, blocking=True) -> int:
+        if TRACE:
+            ic()
         ports_available = [
             port
             for port in range(self.rtp_port_low, self.rtp_port_high + 1)
@@ -728,6 +792,8 @@ class VoIPPhone:
         return selection
 
     def release_ports(self, call: Optional[VoIPCall] = None) -> None:
+        if TRACE:
+            ic()
         self.portsLock.acquire()
         self._cleanup_dead_calls()
         try:
@@ -748,6 +814,8 @@ class VoIPPhone:
             self.portsLock.release()
 
     def _cleanup_dead_calls(self) -> None:
+        if TRACE:
+            ic()
         to_delete = []
         for thread in self.threads:
             if not thread.is_alive():

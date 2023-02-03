@@ -9,6 +9,7 @@ from base64 import b16encode, b64encode
 from threading import Lock, Timer
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+import jinja2
 from rich import print
 
 import pyvoip
@@ -23,66 +24,43 @@ from pyvoip.templates.sip import SIPHeaderTemplate
 if TYPE_CHECKING:
     from pyvoip.proto import RTP
 
+from icecream import ic
 
 debug = pyvoip.debug
+TRACE = pyvoip.TRACE
 
 
-def fmt(msg_type: SIPMessageType, vars: dict[str, Any]) -> str:
+def fmt(
+    template: SIPHeaderTemplate | SIPBodyTemplate,
+    vars: dict[str, Any],
+    fix_newlines: bool = True,
+) -> str:
     """
     A temporary function to allow migration to templates.
 
     Parameters
     ----------
-    msg_type
-        A flag specifying which template to use.
+    teplate:
+        A template to be used.
     vars
         A dictionary of variables to be used in the template.
+    fix_newlines:
+        Whether to fix newlines in the template.
 
     Returns
     -------
     str
         The rendered template.
     """
-
-    import jinja2
-
-    e = jinja2.Environment()
-    t = e.from_string(
-        SIPHeaderTemplate.REQUEST.value
-        if msg_type == SIPMessageType.REQUEST
-        else SIPHeaderTemplate.RESPONSE.value
-    )
-    msg = t.render(**vars).lstrip().replace("\n", "\r\n")
-    # print("Call of fmt function. Rendered msg:")
-    # print(msg)
-    return msg
-
-
-def fmt_body(vars: dict[str, Any], body_type: str = "SDP") -> str:
-    """
-    A temporary function to allow migration to templates.
-
-    Parameters
-    ----------
-    body_type
-        A flag specifying which template to use.
-    vars
-        A dictionary of variables to be used in the template.
-
-    Returns
-    -------
-    str
-        The rendered template.
-    """
-
-    import jinja2
+    if TRACE:
+        ic()
 
     e = jinja2.Environment()
-    t = e.from_string(SIPBodyTemplate[body_type].value)
-    # do not replace newlines here as they are going to
-    # be replaced in fmt function.
+    t = e.from_string(template.value)
     msg = t.render(**vars).lstrip()
-    # print("Call of fmt_body function. Rendered msg:")
+    if fix_newlines:
+        msg = msg.replace("\n", "\r\n")
+    # print("Call of fmt function. Rendered msg:")
     # print(msg)
     return msg
 
@@ -99,6 +77,8 @@ class SIPClient:
         call_callback: Optional[Callable[[SIPMessage], Optional[str]]] = None,
         transport_mode: TransportMode = TransportMode.UDP,
     ):
+        if TRACE:
+            ic()
         self.uuid = uuid.uuid4()
         self.NSD = False
         self.server = server
@@ -137,6 +117,8 @@ class SIPClient:
         Send a message to the server. This is the replacement for recurrent
         self.out.sendto calls to allow to check on messages being sent out.
         """
+        if TRACE:
+            ic()
 
         dst = dst or self.server
         dst_port = dst_port or self.port
@@ -156,6 +138,8 @@ class SIPClient:
         """
         Receive a message from the server. This is the replacement for recurrent
         self.s.recv calls to allow to check on messages being received.
+
+        Don't trace here as it will generate a lot of output.
         """
 
         raw, (addr, port) = self.s.recvfrom(buffsize)
@@ -167,6 +151,8 @@ class SIPClient:
         return raw
 
     def recv(self) -> None:
+        if TRACE:
+            ic()
         while self.NSD:
             self.recvLock.acquire()
             self.s.setblocking(False)
@@ -200,6 +186,8 @@ class SIPClient:
             self.recvLock.release()
 
     def parse_message(self, message: SIPMessage) -> None:
+        if TRACE:
+            ic()
         if message.type != SIPMessageType.REQUEST:
             if message.status == SIPStatus.OK:
                 if self.call_callback is not None:
@@ -236,16 +224,20 @@ class SIPClient:
                 self.call_callback(message)
         elif message.method == "BYE":
             # TODO: If callCallback is None, the call doesn't exist, 481
+            # this is not actual call_callback but the callback assigned
+            # to bye by voip.py
             if self.call_callback:
                 self.call_callback(message)
+
+            # this actually hangs up the incoming call
             response = self.gen_ok(message)
             try:
                 # BYE comes from client cause server only acts as mediator
                 _sender_address = message.headers["Via"][0]["address"]
                 _sender_port = message.headers["Via"][0]["port"]
                 self.send_b(response, _sender_address, _sender_port)
-            except Exception:
-                debug("BYE Answer failed falling back to server as target")
+            except Exception as e:
+                debug("BYE Answer failed falling back to server as target", e)
                 self.send_b(
                     response,
                     message.headers["Via"][0]["address"],
@@ -276,6 +268,8 @@ class SIPClient:
             debug("TODO: Add 400 Error on non processable request")
 
     def start(self) -> None:
+        if TRACE:
+            ic()
         if self.NSD:
             raise RuntimeError("Attempted to start already started SIPClient")
         self.NSD = True
@@ -298,6 +292,8 @@ class SIPClient:
         t.start()
 
     def stop(self) -> None:
+        if TRACE:
+            ic()
         self.NSD = False
         if self.registerThread:
             # Only run if registerThread exists
@@ -306,6 +302,8 @@ class SIPClient:
         self._close_sockets()
 
     def _close_sockets(self) -> None:
+        if TRACE:
+            ic()
         if hasattr(self, "s"):
             if self.s:
                 self.s.close()
@@ -314,16 +312,22 @@ class SIPClient:
                 self.out.close()
 
     def gen_call_id(self) -> str:
+        if TRACE:
+            ic()
         hash = hashlib.sha256(str(self.callID.next()).encode("utf8"))
         hhash = hash.hexdigest()
         return f"{hhash[0:32]}@{self.bind_ip}:{self.bind_port}"
 
     def gen_last_call_id(self) -> str:
+        if TRACE:
+            ic()
         hash = hashlib.sha256(str(self.callID.current() - 1).encode("utf8"))
         hhash = hash.hexdigest()
         return f"{hhash[0:32]}@{self.bind_ip}:{self.bind_port}"
 
     def gen_tag(self) -> str:
+        if TRACE:
+            ic()
         # Keep as True instead of NSD so it can generate a tag on deregister.
         while True:
             rand = str(random.randint(1, 4294967296)).encode("utf8")
@@ -334,9 +338,11 @@ class SIPClient:
         return ""
 
     def gen_sip_version_not_supported(self, request: SIPMessage) -> str:
+        if TRACE:
+            ic()
         # TODO: Add Supported
         response = "SIP/2.0 505 SIP Version Not Supported\r\n"
-        response += self._gen_response_via_header(request)
+        response += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
         response += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
@@ -355,12 +361,16 @@ class SIPClient:
         return response
 
     def _hash_md5(self, data: bytes) -> str:
+        if TRACE:
+            ic()
         """
         MD5 Hash function.
         """
         return hashlib.md5(data).hexdigest()
 
     def _hash_sha256(self, data: bytes) -> str:
+        if TRACE:
+            ic()
         """
         SHA-256 Hash function.
         """
@@ -369,6 +379,8 @@ class SIPClient:
         return sha256.hexdigest()
 
     def _hash_sha512_256(self, data: bytes) -> str:
+        if TRACE:
+            ic()
         """
         SHA-512-256 Hash function.
         """
@@ -377,6 +389,8 @@ class SIPClient:
         return sha512.hexdigest()[:64]
 
     def gen_digest(self, request: SIPMessage, body: str = "") -> dict[str, str]:
+        if TRACE:
+            ic()
         server = request.headers["From"]["host"]
         realm = request.authentication["realm"]
         user = request.headers["From"]["user"]
@@ -447,6 +461,8 @@ class SIPClient:
         return response
 
     def gen_authorization(self, request: SIPMessage, body: str = "") -> str:
+        if TRACE:
+            ic()
         if request.authentication["method"].lower() == "digest":
             digest = self.gen_digest(request)
             response = (
@@ -486,6 +502,8 @@ class SIPClient:
         Generate unique branch id according to
         https://datatracker.ietf.org/doc/html/rfc3261#section-8.1.1.7
         """
+        if TRACE:
+            ic()
         branchid = uuid.uuid4().hex[: length - 7]
         return f"z9hG4bK{branchid}"
 
@@ -493,6 +511,8 @@ class SIPClient:
         """
         Generate client instance specific urn:uuid
         """
+        if TRACE:
+            ic()
         return str(uuid.uuid4()).upper()
 
     def gen_register(
@@ -515,6 +535,8 @@ class SIPClient:
             Right now, it returns a string containing the SIP message. In the future,
             it will return a SIPMessage object.
         """
+        if TRACE:
+            ic()
         vars = dict(
             method="REGISTER",
             r_user=None,
@@ -552,7 +574,7 @@ class SIPClient:
             ],  # strip Authorization:_ not to break compatibility
             body=None,
         )
-        register_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+        register_request = fmt(template=SIPHeaderTemplate.REQUEST, vars=vars)
 
         return register_request
 
@@ -592,6 +614,8 @@ class SIPClient:
         str
             Formatted INVITE request.
         """
+        if TRACE:
+            ic()
         tag = self.gen_tag()
         self.tagLibrary[call_id] = tag
 
@@ -606,7 +630,7 @@ class SIPClient:
             sdp_direction=sendtype,
         )
 
-        body = fmt_body(vars=body_vars)
+        body = fmt(template=SIPBodyTemplate.SDP, vars=body_vars, fix_newlines=False)
 
         vars = dict(
             method="INVITE",
@@ -647,7 +671,7 @@ class SIPClient:
             body=body,
         )
 
-        invite_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+        invite_request = fmt(template=SIPHeaderTemplate.REQUEST, vars=vars)
 
         return invite_request
 
@@ -665,6 +689,8 @@ class SIPClient:
         str
             Formatted ACK request.
         """
+        if TRACE:
+            ic()
         vars = dict(
             method="ACK",
             r_user=response.headers["To"]["user"],
@@ -713,7 +739,7 @@ class SIPClient:
             # ],  # strip Authorization:_ not to break compatibility
             # body=None,
         )
-        ack_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+        ack_request = fmt(template=SIPHeaderTemplate.REQUEST, vars=vars)
 
         return ack_request
 
@@ -734,6 +760,8 @@ class SIPClient:
         str
             Formatted BYE request.
         """
+        if TRACE:
+            ic()
 
         # bye can go from the same side as the invite
         # or from the other side. this affects the tags
@@ -811,9 +839,91 @@ class SIPClient:
             # ],  # strip Authorization:_ not to break compatibility
             # body=None,
         )
-        bye_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+        bye_request = fmt(template=SIPHeaderTemplate.REQUEST, vars=vars)
 
         return bye_request
+
+    def gen_ok(self, request: SIPMessage) -> str:
+        if TRACE:
+            ic()
+        okResponse = "SIP/2.0 200 OK\r\n"
+        okResponse += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
+        okResponse += f"From: {request.headers['From']['raw']}\r\n"
+        to = request.headers["To"]
+        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
+        okResponse += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
+        okResponse += f"Call-ID: {request.headers['Call-ID']}\r\n"
+        okResponse += (
+            f"CSeq: {request.headers['CSeq']['check']} "
+            + f"{request.headers['CSeq']['method']}\r\n"
+        )
+        okResponse += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+        okResponse += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
+        okResponse += "Content-Length: 0\r\n\r\n"
+
+        vars = dict(
+            status_code=200,
+            status_message="OK",
+            method=request.headers["CSeq"]["method"],
+            # r_user=request.headers["Contact"]["user"],
+            # r_domain=request.headers["Contact"]["host"],
+            # r_port=request.headers["Contact"]["port"],
+            # for responses Via should remain the same as in the request
+            # as it is used to forward the response back to the
+            # transaction origin
+            vias=self._gen_response_via_header(request),
+            # branch should be regenerated if 200 OK message arrives
+            # otherwise it should be the same as in the INVITE request
+            # as this is response, we can leave From header as is
+            f_raw=request.headers["From"]["raw"],
+            # f_name=request.headers["From"]["display-name"],
+            # f_user=request.headers["From"]["user"],
+            # f_domain=request.headers["From"]["host"],
+            # f_tag=request.headers["From"]["tag"],
+            # if there is a tag in to stored already,
+            # it means that we are further in dialog
+            # so no need to manipulate it
+            t_raw=request.headers["To"]["raw"]
+            if request.headers["To"]["tag"]
+            else None,
+            # this wont be used if t_raw is set
+            t_name=request.headers["To"]["display-name"],
+            t_user=request.headers["To"]["user"],
+            t_domain=request.headers["To"]["host"],
+            t_tag=request.headers["To"]["tag"]
+            if request.headers["To"]["tag"]
+            else self.gen_tag(),
+            call_id=request.headers["Call-ID"],
+            # cseq is not incremented in either case
+            cseq_num=int(request.headers["CSeq"]["check"]),
+            # no need for contact in ACK
+            c_user=self.user,
+            c_domain=self.bind_ip,
+            c_port=self.bind_port,
+            c_transport=self.transport_mode,
+            c_params=None,
+            # allow is not needed in ACK
+            allow=", ".join(pyvoip.SIPCompatibleMethods),
+            # expires is not needed in ACK
+            expires=None,
+            user_agent=f"pyvoip {pyvoip.__version__}",
+            max_forwards=70,
+            # Content type/length should be used in late media
+            # No support as of yet, though
+            content_type=None,
+            content_length=0,
+            # Usually ACK is not authenticated
+            authorization=None
+            # if request is None
+            # else self.gen_authorization(request)[
+            #     15:
+            # ],  # strip Authorization:_ not to break compatibility
+            # body=None,
+        )
+        ok_response = fmt(template=SIPHeaderTemplate.RESPONSE, vars=vars)
+
+        return ok_response
+        # return okResponse
 
     # def gen_subscribe(self, response: SIPMessage) -> str:
     #     subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
@@ -851,8 +961,10 @@ class SIPClient:
     #     return subRequest
 
     def gen_busy(self, request: SIPMessage) -> str:
+        if TRACE:
+            ic()
         response = "SIP/2.0 486 Busy Here\r\n"
-        response += self._gen_response_via_header(request)
+        response += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
         response += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
@@ -871,28 +983,12 @@ class SIPClient:
 
         return response
 
-    def gen_ok(self, request: SIPMessage) -> str:
-        okResponse = "SIP/2.0 200 OK\r\n"
-        okResponse += self._gen_response_via_header(request)
-        okResponse += f"From: {request.headers['From']['raw']}\r\n"
-        to = request.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        okResponse += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-        okResponse += f"Call-ID: {request.headers['Call-ID']}\r\n"
-        okResponse += (
-            f"CSeq: {request.headers['CSeq']['check']} "
-            + f"{request.headers['CSeq']['method']}\r\n"
-        )
-        okResponse += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        okResponse += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-        okResponse += "Content-Length: 0\r\n\r\n"
-
-        return okResponse
-
     def gen_ringing(self, request: SIPMessage) -> str:
+        if TRACE:
+            ic()
         tag = self.gen_tag()
         regRequest = "SIP/2.0 180 Ringing\r\n"
-        regRequest += self._gen_response_via_header(request)
+        regRequest += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
         regRequest += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
@@ -919,6 +1015,8 @@ class SIPClient:
         ms: dict[int, dict[int, "RTP.PayloadType"]],
         sendtype: "RTP.TransmitType",
     ) -> str:
+        if TRACE:
+            ic()
         # Generate body first for content length
         body = "v=0\r\n"
         # TODO: Check IPv4/IPv6
@@ -945,7 +1043,7 @@ class SIPClient:
         tag = self.tagLibrary[request.headers["Call-ID"]]
 
         regRequest = "SIP/2.0 200 OK\r\n"
-        regRequest += self._gen_response_via_header(request)
+        regRequest += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
         regRequest += f"From: {request.headers['From']['raw']}\r\n"
         to = request.headers["To"]
         display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
@@ -968,29 +1066,50 @@ class SIPClient:
         return regRequest
 
     def _gen_options_response(self, request: SIPMessage) -> str:
+        if TRACE:
+            ic()
         return self.gen_busy(request)
 
-    def _gen_response_via_header(self, request: SIPMessage) -> str:
-        via = ""
-        for h_via in request.headers["Via"]:
-            v_line = (
-                "Via: SIP/2.0/"
-                + str(self.transport_mode)
-                + " "
-                + f'{h_via["address"][0]}:{h_via["address"][1]}'
+    # def _gen_response_via_header(self, request: SIPMessage) -> str:
+    #     via = ""
+    #     for h_via in request.headers["Via"]:
+    #         v_line = (
+    #             "Via: SIP/2.0/"
+    #             + str(self.transport_mode)
+    #             + " "
+    #             + f'{h_via["address"][0]}:{h_via["address"][1]}'
+    #         )
+    #         if "branch" in h_via.keys():
+    #             v_line += f';branch={h_via["branch"]}'
+    #         if "rport" in h_via.keys():
+    #             if h_via["rport"] is not None:
+    #                 v_line += f';rport={h_via["rport"]}'
+    #             else:
+    #                 v_line += ";rport"
+    #         if "received" in h_via.keys():
+    #             v_line += f';received={h_via["received"]}'
+    #         v_line += "\r\n"
+    #         via += v_line
+    #     return via
+    def _gen_response_via_header(self, request: SIPMessage) -> list[str]:
+        if TRACE:
+            ic()
+        vias = []
+        for via in request.headers["Via"]:
+            vias.append(
+                fmt(
+                    template=SIPHeaderTemplate.RESPONSE_VIA,
+                    vars=dict(
+                        v_proto=via["proto"],
+                        v_addr=via["address"],
+                        v_port=via["port"],
+                        rport=via["rport"],
+                        branch=via["branch"],
+                    ),
+                    fix_newlines=False,
+                )
             )
-            if "branch" in h_via.keys():
-                v_line += f';branch={h_via["branch"]}'
-            if "rport" in h_via.keys():
-                if h_via["rport"] is not None:
-                    v_line += f';rport={h_via["rport"]}'
-                else:
-                    v_line += ";rport"
-            if "received" in h_via.keys():
-                v_line += f';received={h_via["received"]}'
-            v_line += "\r\n"
-            via += v_line
-        return via
+        return vias
 
     def invite(
         self,
@@ -998,6 +1117,8 @@ class SIPClient:
         ms: dict[int, dict[int, "RTP.PayloadType"]],
         sendtype: "RTP.TransmitType",
     ) -> tuple[SIPMessage, str, int]:
+        if TRACE:
+            ic()
         call_id = self.gen_call_id()
         sess_id = self.sessID.next()
         invite = self.gen_invite(number, str(sess_id), ms, sendtype, call_id)
@@ -1050,6 +1171,8 @@ class SIPClient:
         -------
         None
         """
+        if TRACE:
+            ic()
         ack = self.gen_ack(response)
         # handle negative responses first
         # these are negotiated with server
@@ -1072,6 +1195,8 @@ class SIPClient:
                 )
 
     def bye(self, request: SIPMessage) -> None:
+        if TRACE:
+            ic()
         message = self.gen_bye(request)
         # TODO: Handle bye to server vs. bye to connected client
         self.recvLock.acquire()
@@ -1097,6 +1222,8 @@ class SIPClient:
         self.recvLock.release()
 
     def deregister(self) -> bool:
+        if TRACE:
+            ic()
         self.recvLock.acquire()
         first_register_request = self.gen_register(deregister=True)
         self.send_b(first_register_request)
@@ -1151,6 +1278,8 @@ class SIPClient:
         return False
 
     def register(self) -> bool:
+        if TRACE:
+            ic()
         self.recvLock.acquire()
         first_register_request = self.gen_register()
         self.send_b(first_register_request)
@@ -1253,6 +1382,8 @@ class SIPClient:
             )
 
     def _handle_bad_request(self) -> None:
+        if TRACE:
+            ic()
         # Bad Request
         # TODO: implement
         # TODO: check if broken connection can be brought back
@@ -1279,6 +1410,8 @@ class SIPClient:
         SIPStatus.TRYING. This while loop tries checks every second for an
         updated response. It times out after 30 seconds.
         """
+        if TRACE:
+            ic()
         start_time = time.monotonic()
         while response.status == SIPStatus.TRYING:
             if (time.monotonic() - start_time) >= self.register_timeout:

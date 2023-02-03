@@ -4,6 +4,7 @@ __all__ = ["SIP", "RTP", "VoIP"]
 
 __version__ = "0.1.2"
 
+TRACE = True
 DEBUG = False
 
 """

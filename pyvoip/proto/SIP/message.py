@@ -363,7 +363,8 @@ class SIPMessage:
         if header == "Via":
             for d in data:
                 info = regex.VIA_SPLIT.split(d)
-                _type = info[0]  # SIP Method
+                _type = info[0]  # SIP/2.0/UDP
+                _proto = _type.split("/")[2]  # UDP
                 _address = info[1].split(":")  # Tuple: address, port
                 _ip = _address[0]
 
@@ -372,7 +373,12 @@ class SIPMessage:
                 Needs to be str. Check response build for better str creation
                 """
                 _port = int(info[1].split(":")[1]) if len(_address) > 1 else 5060
-                _via = {"type": _type, "address": _ip, "port": _port}
+                _via = {
+                    "type": _type,
+                    "proto": _proto,
+                    "address": _ip,
+                    "port": _port,
+                }
 
                 """
                 Sets branch, maddr, ttl, received, and rport if defined
