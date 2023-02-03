@@ -364,7 +364,9 @@ class VoIPCall:
             ic()
         if self.state != CallState.RINGING:
             raise InvalidStateError("Call is not ringing")
-        message = self.sip.gen_busy(self.request)
+        message = self.sip.gen_response(
+            self.request, status_code=486, status_message="Busy Here"
+        )
         self.sip.send_b(
             message,
             self.request.headers["Via"][0]["address"],
@@ -571,7 +573,9 @@ class VoIPPhone:
                 self.calls[call_id].renegotiate(request)
             return  # Raise Error
         if self.call_callback is None:
-            message = self.sip.gen_busy(request)
+            message = self.sip.gen_response(
+                request, status_code=486, status_message="Busy Here"
+            )
             self.sip.send_b(
                 message,
                 request.headers["Via"][0]["address"],
@@ -599,7 +603,9 @@ class VoIPPhone:
                 self.threads.append(t)
                 self.threadLookup[t] = call_id
             except Exception:
-                message = self.sip.gen_busy(request)
+                message = self.sip.gen_response(
+                    request, status_code=486, status_message="Busy Here"
+                )
                 self.sip.send_b(
                     message,
                     request.headers["Via"][0]["address"],
@@ -620,7 +626,9 @@ class VoIPPhone:
         if TRACE:
             ic()
         debug("Options recieved")
-        response = self.sip.gen_busy(request)
+        response = self.sip.gen_response(
+            request, status_code=486, status_message="Busy Here"
+        )
         if self.call_callback:
             response = response.replace("486 Busy Here", "200 OK")
             # TODO: Remove warning, implement RFC 3264

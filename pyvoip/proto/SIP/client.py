@@ -213,7 +213,9 @@ class SIPClient:
             return
         elif message.method == "INVITE":
             if self.call_callback is None:
-                request = self.gen_busy(message)
+                request = self.gen_response(
+                    message, status_code=486, status_message="Busy Here"
+                )
                 # TODO what about port?
                 self.send_b(
                     request,
@@ -230,7 +232,7 @@ class SIPClient:
                 self.call_callback(message)
 
             # this actually hangs up the incoming call
-            response = self.gen_ok(message)
+            response = self.gen_response(message, status_code=200, status_message="OK")
             try:
                 # BYE comes from client cause server only acts as mediator
                 _sender_address = message.headers["Via"][0]["address"]
@@ -248,7 +250,7 @@ class SIPClient:
         elif message.method == "CANCEL":
             # TODO: If callCallback is None, the call doesn't exist, 481
             self.call_callback(message)  # type: ignore
-            response = self.gen_ok(message)
+            response = self.gen_response(message, status_code=200, status_message="OK")
             self.send_b(
                 response,
                 message.headers["Via"][0]["address"],
@@ -843,27 +845,21 @@ class SIPClient:
 
         return bye_request
 
-    def gen_ok(self, request: SIPMessage) -> str:
+    def gen_response(
+        self,
+        request: SIPMessage,
+        status_code: int | str | None = None,
+        status_message: str = "No Message Given",
+    ) -> str:
         if TRACE:
             ic()
-        okResponse = "SIP/2.0 200 OK\r\n"
-        okResponse += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
-        okResponse += f"From: {request.headers['From']['raw']}\r\n"
-        to = request.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        okResponse += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-        okResponse += f"Call-ID: {request.headers['Call-ID']}\r\n"
-        okResponse += (
-            f"CSeq: {request.headers['CSeq']['check']} "
-            + f"{request.headers['CSeq']['method']}\r\n"
-        )
-        okResponse += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        okResponse += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-        okResponse += "Content-Length: 0\r\n\r\n"
+
+        if status_code is None:
+            raise ValueError("Status code is required")
 
         vars = dict(
-            status_code=200,
-            status_message="OK",
+            status_code=status_code,
+            status_message=status_message,
             method=request.headers["CSeq"]["method"],
             # r_user=request.headers["Contact"]["user"],
             # r_domain=request.headers["Contact"]["host"],
@@ -923,7 +919,44 @@ class SIPClient:
         ok_response = fmt(template=SIPHeaderTemplate.RESPONSE, vars=vars)
 
         return ok_response
-        # return okResponse
+
+    # def gen_busy(self, request: SIPMessage) -> str:
+    #     if TRACE:
+    #         ic()
+    #     response = "SIP/2.0 486 Busy Here\r\n"
+    #     response += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
+    #     response += f"From: {request.headers['From']['raw']}\r\n"
+    #     to = request.headers["To"]
+    #     display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
+    #     response += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
+    #     response += f"Call-ID: {request.headers['Call-ID']}\r\n"
+    #     response += (
+    #         f"CSeq: {request.headers['CSeq']['check']} "
+    #         + f"{request.headers['CSeq']['method']}\r\n"
+    #     )
+    #     response += f"Contact: {request.headers['Contact']['raw']}\r\n"
+    #     # TODO: Add Supported
+    #     response += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+    #     response += 'Warning: 399 GS "Unable to accept call"\r\n'
+    #     response += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
+    #     response += "Content-Length: 0\r\n\r\n"
+    #
+    #     okResponse = "SIP/2.0 200 OK\r\n"
+    #     okResponse += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
+    #     okResponse += f"From: {request.headers['From']['raw']}\r\n"
+    #     to = request.headers["To"]
+    #     display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
+    #     okResponse += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
+    #     okResponse += f"Call-ID: {request.headers['Call-ID']}\r\n"
+    #     okResponse += (
+    #         f"CSeq: {request.headers['CSeq']['check']} "
+    #         + f"{request.headers['CSeq']['method']}\r\n"
+    #     )
+    #     okResponse += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+    #     okResponse += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
+    #     okResponse += "Content-Length: 0\r\n\r\n"
+    #
+    #     return response
 
     # def gen_subscribe(self, response: SIPMessage) -> str:
     #     subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
@@ -959,29 +992,6 @@ class SIPClient:
     #     subRequest += "\r\n\r\n"
     #
     #     return subRequest
-
-    def gen_busy(self, request: SIPMessage) -> str:
-        if TRACE:
-            ic()
-        response = "SIP/2.0 486 Busy Here\r\n"
-        response += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
-        response += f"From: {request.headers['From']['raw']}\r\n"
-        to = request.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        response += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-        response += f"Call-ID: {request.headers['Call-ID']}\r\n"
-        response += (
-            f"CSeq: {request.headers['CSeq']['check']} "
-            + f"{request.headers['CSeq']['method']}\r\n"
-        )
-        response += f"Contact: {request.headers['Contact']['raw']}\r\n"
-        # TODO: Add Supported
-        response += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        response += 'Warning: 399 GS "Unable to accept call"\r\n'
-        response += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-        response += "Content-Length: 0\r\n\r\n"
-
-        return response
 
     def gen_ringing(self, request: SIPMessage) -> str:
         if TRACE:
@@ -1068,7 +1078,7 @@ class SIPClient:
     def _gen_options_response(self, request: SIPMessage) -> str:
         if TRACE:
             ic()
-        return self.gen_busy(request)
+        return self.gen_response(request, status_code=486, status_message="Busy Here")
 
     # def _gen_response_via_header(self, request: SIPMessage) -> str:
     #     via = ""
