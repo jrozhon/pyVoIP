@@ -854,8 +854,26 @@ class SIPClient:
         if TRACE:
             ic()
 
+        # initiate tag to None
+        tag = None
         if status_code is None:
             raise ValueError("Status code is required")
+
+        # for Ringing and Session Progress generate and store the tag
+        if status_code in [180, 183]:
+            tag = self.gen_tag()
+            self.tagLibrary[request.headers["Call-ID"]] = tag
+
+        # it is possible that 180 or 183 has not been generated
+        # this is just a to be on the safe side
+        # check if there is a tag for given call id
+        # if there is, use it, otherwise generate a new one
+        if status_code == 200:
+            if request.headers["Call-ID"] in self.tagLibrary:
+                tag = self.tagLibrary[request.headers["Call-ID"]]
+            else:
+                tag = self.gen_tag()
+                self.tagLibrary[request.headers["Call-ID"]] = tag
 
         vars = dict(
             status_code=status_code,
@@ -886,9 +904,7 @@ class SIPClient:
             t_name=request.headers["To"]["display-name"],
             t_user=request.headers["To"]["user"],
             t_domain=request.headers["To"]["host"],
-            t_tag=request.headers["To"]["tag"]
-            if request.headers["To"]["tag"]
-            else self.gen_tag(),
+            t_tag=request.headers["To"]["tag"] if request.headers["To"]["tag"] else tag,
             call_id=request.headers["Call-ID"],
             # cseq is not incremented in either case
             cseq_num=int(request.headers["CSeq"]["check"]),
@@ -919,79 +935,6 @@ class SIPClient:
         ok_response = fmt(template=SIPHeaderTemplate.RESPONSE, vars=vars)
 
         return ok_response
-
-    # def gen_busy(self, request: SIPMessage) -> str:
-    #     if TRACE:
-    #         ic()
-    #     response = "SIP/2.0 486 Busy Here\r\n"
-    #     response += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
-    #     response += f"From: {request.headers['From']['raw']}\r\n"
-    #     to = request.headers["To"]
-    #     display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-    #     response += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-    #     response += f"Call-ID: {request.headers['Call-ID']}\r\n"
-    #     response += (
-    #         f"CSeq: {request.headers['CSeq']['check']} "
-    #         + f"{request.headers['CSeq']['method']}\r\n"
-    #     )
-    #     response += f"Contact: {request.headers['Contact']['raw']}\r\n"
-    #     # TODO: Add Supported
-    #     response += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-    #     response += 'Warning: 399 GS "Unable to accept call"\r\n'
-    #     response += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-    #     response += "Content-Length: 0\r\n\r\n"
-    #
-    #     okResponse = "SIP/2.0 200 OK\r\n"
-    #     okResponse += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
-    #     okResponse += f"From: {request.headers['From']['raw']}\r\n"
-    #     to = request.headers["To"]
-    #     display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-    #     okResponse += f'To: {display_name}<{to["uri"]}>;tag=' + f"{self.gen_tag()}\r\n"
-    #     okResponse += f"Call-ID: {request.headers['Call-ID']}\r\n"
-    #     okResponse += (
-    #         f"CSeq: {request.headers['CSeq']['check']} "
-    #         + f"{request.headers['CSeq']['method']}\r\n"
-    #     )
-    #     okResponse += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-    #     okResponse += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-    #     okResponse += "Content-Length: 0\r\n\r\n"
-    #
-    #     return response
-
-    # def gen_subscribe(self, response: SIPMessage) -> str:
-    #     subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
-    #     subRequest += (
-    #         "Via: SIP/2.0/"
-    #         + str(self.transport_mode)
-    #         + f" {self.bind_ip}:{self.bind_port};"
-    #         + f"branch={self.gen_branch()};rport\r\n"
-    #     )
-    #     subRequest += (
-    #         f'From: "{self.user}" '
-    #         + f"<sip:{self.user}@{self.server}>;tag="
-    #         + f"{self.gen_tag()}\r\n"
-    #     )
-    #     subRequest += f"To: <sip:{self.user}@{self.server}>\r\n"
-    #     subRequest += f'Call-ID: {response.headers["Call-ID"]}\r\n'
-    #     subRequest += f"CSeq: {self.subscribe_counter.next()} SUBSCRIBE\r\n"
-    #     # TODO: check if transport is needed
-    #     subRequest += (
-    #         "Contact: "
-    #         + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port};"
-    #         + "transport="
-    #         + str(self.transport_mode)
-    #         + ">;+sip.instance="
-    #         + f'"<urn:uuid:{self.urnUUID}>"\r\n'
-    #     )
-    #     subRequest += "Max-Forwards: 70\r\n"
-    #     subRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-    #     subRequest += f"Expires: {self.default_expires * 2}\r\n"
-    #     subRequest += "Event: message-summary\r\n"
-    #     subRequest += "Accept: application/simple-message-summary"
-    #     subRequest += "Content-Length: 0"
-    #     subRequest += "\r\n\r\n"
-    #
-    #     return subRequest
 
     def gen_ringing(self, request: SIPMessage) -> str:
         if TRACE:

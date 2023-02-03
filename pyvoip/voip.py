@@ -589,7 +589,9 @@ class VoIPPhone:
                 if proposed not in self.session_ids:
                     self.session_ids.append(proposed)
                     sess_id = proposed
-            message = self.sip.gen_ringing(request)
+            message = self.sip.gen_response(
+                request, status_code=180, status_message="Ringing"
+            )
             self.sip.send_b(
                 message,
                 request.headers["Via"][0]["address"],
