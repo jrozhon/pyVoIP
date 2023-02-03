@@ -332,45 +332,6 @@ class SIPMessage:
         )
         return s
 
-    def __str__(self) -> str:
-        e = jinja2.Environment()
-        t = e.from_string(
-            SIPHeaderTemplate.RESPONSE
-            if self.type == SIPMessageType.RESPONSE
-            else SIPHeaderTemplate.REQUEST
-        )
-        return t.render(
-            # TODO this is only a boilerplate and needs to be finished
-            # method=method or "",
-            # ruri=ruri or "",
-            # v_proto=via_proto or "",
-            # v_addr=via_addr or "",
-            # r_port=r_port or "",
-            # branch=branch or "",
-            # f_name=f_name or "",
-            # f_user=f_user or "",
-            # f_domain=f_domain or "",
-            # f_tag=f_tag or "",
-            # t_name=t_name or "",
-            # t_user=t_user or "",
-            # t_domain=t_domain or "",
-            # call_id=call_id or "",
-            # cseq_num=cseq_num or "",
-            # subject=subject or "",
-            # date=date or "",
-            # c_uri=c_uri or "",
-            # c_params=c_params or "",
-            # expires=expires or "",
-            # user_agent=user_agent or "",
-            # content_type=content_type or "",
-            # content_length=content_length or "",
-            # body=body or "",
-            # # response - specific
-            # status_code=status_code or "",
-            # status_phrase=status_phrase or "",
-            # reason_phrase=reason_phrase or "",
-        ).replace("\n", "\r\n")
-
     def parse(self, data: bytes) -> None:
         try:
             headers, body = data.split(b"\r\n\r\n")

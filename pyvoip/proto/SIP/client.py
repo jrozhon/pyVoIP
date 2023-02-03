@@ -720,12 +720,9 @@ class SIPClient:
     def gen_bye(self, request: SIPMessage) -> str:
         """
         Format BYE request based on the request to the INVITE request.
+        INVITE is actually a second one and so the request.headers
+        contain all the necessary information.
 
-        !!!! Request actually contains information from the response as well in header.
-        !!!! I.e. request.headers["To"]["tag"] is not None or
-        !!!! request.headers["Contact"] contains destination.
-        !!!! This needs to be clarified.
-        !!!! Right now I just use the data.
 
         Parameters
         ----------
@@ -818,40 +815,40 @@ class SIPClient:
 
         return bye_request
 
-    def gen_subscribe(self, response: SIPMessage) -> str:
-        subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
-        subRequest += (
-            "Via: SIP/2.0/"
-            + str(self.transport_mode)
-            + f" {self.bind_ip}:{self.bind_port};"
-            + f"branch={self.gen_branch()};rport\r\n"
-        )
-        subRequest += (
-            f'From: "{self.user}" '
-            + f"<sip:{self.user}@{self.server}>;tag="
-            + f"{self.gen_tag()}\r\n"
-        )
-        subRequest += f"To: <sip:{self.user}@{self.server}>\r\n"
-        subRequest += f'Call-ID: {response.headers["Call-ID"]}\r\n'
-        subRequest += f"CSeq: {self.subscribe_counter.next()} SUBSCRIBE\r\n"
-        # TODO: check if transport is needed
-        subRequest += (
-            "Contact: "
-            + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port};"
-            + "transport="
-            + str(self.transport_mode)
-            + ">;+sip.instance="
-            + f'"<urn:uuid:{self.urnUUID}>"\r\n'
-        )
-        subRequest += "Max-Forwards: 70\r\n"
-        subRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        subRequest += f"Expires: {self.default_expires * 2}\r\n"
-        subRequest += "Event: message-summary\r\n"
-        subRequest += "Accept: application/simple-message-summary"
-        subRequest += "Content-Length: 0"
-        subRequest += "\r\n\r\n"
-
-        return subRequest
+    # def gen_subscribe(self, response: SIPMessage) -> str:
+    #     subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
+    #     subRequest += (
+    #         "Via: SIP/2.0/"
+    #         + str(self.transport_mode)
+    #         + f" {self.bind_ip}:{self.bind_port};"
+    #         + f"branch={self.gen_branch()};rport\r\n"
+    #     )
+    #     subRequest += (
+    #         f'From: "{self.user}" '
+    #         + f"<sip:{self.user}@{self.server}>;tag="
+    #         + f"{self.gen_tag()}\r\n"
+    #     )
+    #     subRequest += f"To: <sip:{self.user}@{self.server}>\r\n"
+    #     subRequest += f'Call-ID: {response.headers["Call-ID"]}\r\n'
+    #     subRequest += f"CSeq: {self.subscribe_counter.next()} SUBSCRIBE\r\n"
+    #     # TODO: check if transport is needed
+    #     subRequest += (
+    #         "Contact: "
+    #         + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port};"
+    #         + "transport="
+    #         + str(self.transport_mode)
+    #         + ">;+sip.instance="
+    #         + f'"<urn:uuid:{self.urnUUID}>"\r\n'
+    #     )
+    #     subRequest += "Max-Forwards: 70\r\n"
+    #     subRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+    #     subRequest += f"Expires: {self.default_expires * 2}\r\n"
+    #     subRequest += "Event: message-summary\r\n"
+    #     subRequest += "Accept: application/simple-message-summary"
+    #     subRequest += "Content-Length: 0"
+    #     subRequest += "\r\n\r\n"
+    #
+    #     return subRequest
 
     def gen_busy(self, request: SIPMessage) -> str:
         response = "SIP/2.0 486 Busy Here\r\n"
@@ -1007,6 +1004,7 @@ class SIPClient:
         self.recvLock.acquire()
         self.send_b(invite)
         debug("Invited")
+        # here, the message.headers are first filled with content
         response = SIPMessage(self.recv_b())
 
         while (
@@ -1261,18 +1259,18 @@ class SIPClient:
         # with new urn:uuid or reply with expire 0
         debug("Bad Request")
 
-    def subscribe(self, lastresponse: SIPMessage) -> None:
-        # TODO: check if needed and maybe implement fully
-        self.recvLock.acquire()
-
-        subRequest = self.gen_subscribe(lastresponse)
-        self.send_b(subRequest)
-
-        response = SIPMessage(self.recv_b())
-
-        debug(f'Got response to subscribe: {str(response.heading, "utf8")}')
-
-        self.recvLock.release()
+    # def subscribe(self, lastresponse: SIPMessage) -> None:
+    #     # TODO: check if needed and maybe implement fully
+    #     self.recvLock.acquire()
+    #
+    #     subRequest = self.gen_subscribe(lastresponse)
+    #     self.send_b(subRequest)
+    #
+    #     response = SIPMessage(self.recv_b())
+    #
+    #     debug(f'Got response to subscribe: {str(response.heading, "utf8")}')
+    #
+    #     self.recvLock.release()
 
     def trying_timeout_check(self, response: SIPMessage) -> SIPMessage:
         """
