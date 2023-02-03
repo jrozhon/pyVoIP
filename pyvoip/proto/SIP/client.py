@@ -58,6 +58,7 @@ def fmt(
     e = jinja2.Environment()
     t = e.from_string(template.value)
     msg = t.render(**vars).lstrip()
+    # msg += "\n\n"
     if fix_newlines:
         msg = msg.replace("\n", "\r\n")
     # print("Call of fmt function. Rendered msg:")
@@ -125,6 +126,7 @@ class SIPClient:
 
         print(f"----> {dst}:{dst_port}")
         print(message, end="\n")
+        print(message.encode("utf-8"), end="\n")
         # print(message.encode("utf8"), end="\n")
 
         try:
@@ -482,7 +484,7 @@ class SIPClient:
             if "opaque" in digest:
                 if digest["opaque"]:
                     response += f',opaque="{digest["opaque"]}"'
-            response += "\r\n"
+            # response += "\r\n"
         elif request.authentication["method"].lower() == "basic":
             if not pyvoip.ALLOW_BASIC_AUTH:
                 raise RuntimeError(
@@ -496,7 +498,7 @@ class SIPClient:
             password = self.credentials.password
             userid_pass = f"{username}:{password}".encode("utf8")
             encoded = str(b64encode(userid_pass), "utf8")
-            response = f"Authorization: Basic {encoded}\r\n"
+            # response = f"Authorization: Basic {encoded}\r\n"
         return response
 
     def gen_branch(self, length=32) -> str:
@@ -546,7 +548,7 @@ class SIPClient:
             v_proto=self.transport_mode,
             v_addr=self.bind_ip,
             v_port=self.bind_port,
-            rport=";rport",
+            rport="",
             branch=self.gen_branch(),
             f_name=self.user,
             f_user=self.user,
@@ -634,6 +636,15 @@ class SIPClient:
 
         body = fmt(template=SIPBodyTemplate.SDP, vars=body_vars, fix_newlines=False)
 
+        # this is ugly and needs to be fixed
+        # newlines in body are \n, but they are changed to \r\n in the template
+        # rendering to avoid working with \r\n the whole time.
+        # This, however, changes the length of the body and then SDP is not
+        # parsed correctly. Therefore add as many bytes as there are \n
+        # to the content length.
+
+        body_length = len(body) + body.count("\n")
+
         vars = dict(
             method="INVITE",
             r_user=number,
@@ -641,7 +652,7 @@ class SIPClient:
             v_proto=self.transport_mode,
             v_addr=self.bind_ip,
             v_port=self.bind_port,
-            rport=";rport",
+            rport="",
             branch=self.gen_branch(),
             f_name=self.user,
             f_user=self.user,
@@ -664,7 +675,7 @@ class SIPClient:
             user_agent=f"pyvoip {pyvoip.__version__}",
             max_forwards=70,
             content_type="application/sdp",
-            content_length=len(body),
+            content_length=body_length,
             authorization=None
             if response is None
             else self.gen_authorization(response)[
@@ -700,7 +711,7 @@ class SIPClient:
             v_proto=self.transport_mode,
             v_addr=self.bind_ip,
             v_port=self.bind_port,
-            rport=";rport",
+            rport="",
             # branch should be regenerated if 200 OK message arrives
             # otherwise it should be the same as in the INVITE request
             branch=response.headers["Via"][0]["branch"]
@@ -802,7 +813,7 @@ class SIPClient:
             v_proto=self.transport_mode,
             v_addr=self.bind_ip,
             v_port=self.bind_port,
-            rport=";rport",
+            rport="",
             # branch should be regenerated if 200 OK message arrives
             # otherwise it should be the same as in the INVITE request
             branch=self.gen_branch(),
@@ -850,6 +861,8 @@ class SIPClient:
         request: SIPMessage,
         status_code: int | str | None = None,
         status_message: str = "No Message Given",
+        body: str | None = None,
+        body_type: str | None = None,
     ) -> str:
         if TRACE:
             ic()
@@ -922,44 +935,21 @@ class SIPClient:
             max_forwards=70,
             # Content type/length should be used in late media
             # No support as of yet, though
-            content_type=None,
-            content_length=0,
+            content_type=body_type,
+            # body length is increased by the number of newlines
+            # see body in invite.
+            content_length=len(body) + body.count("\n") if body is not None else 0,
             # Usually ACK is not authenticated
-            authorization=None
+            authorization=None,
             # if request is None
             # else self.gen_authorization(request)[
             #     15:
             # ],  # strip Authorization:_ not to break compatibility
-            # body=None,
+            body=body,
         )
-        ok_response = fmt(template=SIPHeaderTemplate.RESPONSE, vars=vars)
+        response = fmt(template=SIPHeaderTemplate.RESPONSE, vars=vars)
 
-        return ok_response
-
-    def gen_ringing(self, request: SIPMessage) -> str:
-        if TRACE:
-            ic()
-        tag = self.gen_tag()
-        regRequest = "SIP/2.0 180 Ringing\r\n"
-        regRequest += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
-        regRequest += f"From: {request.headers['From']['raw']}\r\n"
-        to = request.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        regRequest += f'To: {display_name}<{to["uri"]}>;tag={tag}\r\n'
-        regRequest += f"Call-ID: {request.headers['Call-ID']}\r\n"
-        regRequest += (
-            f"CSeq: {request.headers['CSeq']['check']} "
-            + f"{request.headers['CSeq']['method']}\r\n"
-        )
-        regRequest += f"Contact: {request.headers['Contact']['raw']}\r\n"
-        # TODO: Add Supported
-        regRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        regRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-        regRequest += "Content-Length: 0\r\n\r\n"
-
-        self.tagLibrary[request.headers["Call-ID"]] = tag
-
-        return regRequest
+        return response
 
     def gen_answer(
         self,
@@ -971,79 +961,32 @@ class SIPClient:
         if TRACE:
             ic()
         # Generate body first for content length
-        body = "v=0\r\n"
-        # TODO: Check IPv4/IPv6
-        body += f"o=pyvoip {sess_id} {int(sess_id)+2} IN IP4 {self.bind_ip}\r\n"
-        body += f"s=pyvoip {pyvoip.__version__}\r\n"
-        # TODO: Check IPv4/IPv6
-        body += f"c=IN IP4 {self.bind_ip}\r\n"
-        body += "t=0 0\r\n"
-        for x in ms:
-            # TODO: Check AVP mode from request
-            body += f"m=audio {x} RTP/AVP"
-            for m in ms[x]:
-                body += f" {m}"
-        body += "\r\n"  # m=audio <port> RTP/AVP <codecs>\r\n
-        for x in ms:
-            for m in ms[x]:
-                body += f"a=rtpmap:{m} {ms[x][m]}/{ms[x][m].rate}\r\n"
-                if str(ms[x][m]) == "telephone-event":
-                    body += f"a=fmtp:{m} 0-15\r\n"
-        body += "a=ptime:20\r\n"
-        body += "a=maxptime:150\r\n"
-        body += f"a={sendtype}\r\n"
-
-        tag = self.tagLibrary[request.headers["Call-ID"]]
-
-        regRequest = "SIP/2.0 200 OK\r\n"
-        regRequest += "\r\n".join(self._gen_response_via_header(request)) + "\r\n"
-        regRequest += f"From: {request.headers['From']['raw']}\r\n"
-        to = request.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        regRequest += f'To: {display_name}<{to["uri"]}>;tag={tag}\r\n'
-        regRequest += f"Call-ID: {request.headers['Call-ID']}\r\n"
-        regRequest += (
-            f"CSeq: {request.headers['CSeq']['check']} "
-            + f"{request.headers['CSeq']['method']}\r\n"
+        body_vars = dict(
+            sdp_user="pyvoip",
+            sdp_sess_id=sess_id,
+            sdp_sess_version=int(sess_id) + 2,
+            sdp_af="IP4",
+            local_ip=self.bind_ip,
+            sdp_ms=ms,
+            sdp_direction=sendtype,
         )
-        regRequest += (
-            "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
-        )
-        # TODO: Add Supported
-        regRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        regRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-        regRequest += "Content-Type: application/sdp\r\n"
-        regRequest += f"Content-Length: {len(body)}\r\n\r\n"
-        regRequest += body
 
-        return regRequest
+        body = fmt(template=SIPBodyTemplate.SDP, vars=body_vars, fix_newlines=False)
+
+        ok_response = self.gen_response(
+            request,
+            status_code=200,
+            status_message="OK",
+            body=body,
+            body_type="application/sdp",
+        )
+        return ok_response
 
     def _gen_options_response(self, request: SIPMessage) -> str:
         if TRACE:
             ic()
         return self.gen_response(request, status_code=486, status_message="Busy Here")
 
-    # def _gen_response_via_header(self, request: SIPMessage) -> str:
-    #     via = ""
-    #     for h_via in request.headers["Via"]:
-    #         v_line = (
-    #             "Via: SIP/2.0/"
-    #             + str(self.transport_mode)
-    #             + " "
-    #             + f'{h_via["address"][0]}:{h_via["address"][1]}'
-    #         )
-    #         if "branch" in h_via.keys():
-    #             v_line += f';branch={h_via["branch"]}'
-    #         if "rport" in h_via.keys():
-    #             if h_via["rport"] is not None:
-    #                 v_line += f';rport={h_via["rport"]}'
-    #             else:
-    #                 v_line += ";rport"
-    #         if "received" in h_via.keys():
-    #             v_line += f';received={h_via["received"]}'
-    #         v_line += "\r\n"
-    #         via += v_line
-    #     return via
     def _gen_response_via_header(self, request: SIPMessage) -> list[str]:
         if TRACE:
             ic()
@@ -1342,19 +1285,6 @@ class SIPClient:
         # TODO: check if broken connection can be brought back
         # with new urn:uuid or reply with expire 0
         debug("Bad Request")
-
-    # def subscribe(self, lastresponse: SIPMessage) -> None:
-    #     # TODO: check if needed and maybe implement fully
-    #     self.recvLock.acquire()
-    #
-    #     subRequest = self.gen_subscribe(lastresponse)
-    #     self.send_b(subRequest)
-    #
-    #     response = SIPMessage(self.recv_b())
-    #
-    #     debug(f'Got response to subscribe: {str(response.heading, "utf8")}')
-    #
-    #     self.recvLock.release()
 
     def trying_timeout_check(self, response: SIPMessage) -> SIPMessage:
         """

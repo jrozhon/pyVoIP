@@ -628,11 +628,14 @@ class VoIPPhone:
         if TRACE:
             ic()
         debug("Options recieved")
-        response = self.sip.gen_response(
-            request, status_code=486, status_message="Busy Here"
-        )
         if self.call_callback:
-            response = response.replace("486 Busy Here", "200 OK")
+            response = self.sip.gen_response(
+                request, status_code=200, status_message="OK"
+            )
+        else:
+            response = self.sip.gen_response(
+                request, status_code=486, status_message="Busy Here"
+            )
             # TODO: Remove warning, implement RFC 3264
         return response
 

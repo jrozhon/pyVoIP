@@ -9,7 +9,7 @@ class SIPHeaderTemplate(Enum):
     # removed branch init string to be consistent with RESPONSE template
     REQUEST = """\
 {{ method }} sip:{% if r_user %}{{ r_user }}@{% endif %}{{ r_domain }}{% if r_port %}:{{ r_port }}{% endif %} SIP/2.0
-Via: SIP/2.0/{{ v_proto }} {{ v_addr }}{% if v_port %}:{{ v_port }}{% endif %}{% if rport is not none %};rport={{ rport }}{% endif %};branch={{ branch }}
+Via: SIP/2.0/{{ v_proto }} {{ v_addr }}{% if v_port %}:{{ v_port }}{% endif %}{% if rport is not none %}{% if rport=="" %};rport{% else %}={{ rport }}{% endif %}{% endif %};branch={{ branch }}
 From: {% if f_name %}"{{ f_name }}" {% endif %}<sip:{% if f_user %}{{ f_user }}@{% endif %}{{ f_domain }}>;tag={{ f_tag }}
 To: {% if t_name %}"{{ t_name }}" {% endif %}<sip:{% if t_user %}{{ t_user }}@{% endif %}{{ t_domain }}>{% if t_tag %};tag={{ t_tag }}{% endif %}
 Call-ID: {{ call_id }}
@@ -24,7 +24,8 @@ CSeq: {{ cseq_num }} {{ method }}
 {%- if content_type %}{{"\n"}}Content-Type: {{ content_type }}{% endif %}
 {%- if content_length is not none %}{{"\n"}}Content-Length: {{ content_length }}{% endif %}
 {%- if authorization %}{{"\n"}}Authorization: {{ authorization }}{% endif %}
-{%- if body %}{{"\n\n"}}{{ body }}{% endif %}
+
+{% if body %}{{ body }}{% endif %}
 """
     RESPONSE = """\
 SIP/2.0 {{ status_code }} {{ status_message }}
@@ -43,7 +44,8 @@ CSeq: {{ cseq_num }} {{ method }}
 {%- if content_type %}{{"\n"}}Content-Type: {{ content_type }}{% endif %}
 {%- if content_length is not none %}{{"\n"}}Content-Length: {{ content_length }}{% endif %}
 {%- if www_auth %}{{"\n"}}WWW-Authenticate: {{ www_auth }}{% endif %}
-{%- if body %}{{"\n\n"}}{{ body }}{% endif %}
+
+{% if body %}{{ body }}{% endif %}
 """
     # removed branch init string to allow multiple lines of Via header in responses
     RESPONSE_VIA = "Via: SIP/2.0/{{ v_proto }} {{ v_addr }}{% if v_port %}:{{ v_port }}{% endif %}{% if rport is not none %};rport={{ rport }}{% endif %};branch={{ branch }}"
