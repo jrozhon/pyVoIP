@@ -531,6 +531,7 @@ class SIPClient:
             t_name=self.user,
             t_user=self.user,
             t_domain=self.server,
+            t_tag=None,
             call_id=self.gen_call_id(),
             cseq_num=self.register_counter.next(),
             c_user=self.user,
@@ -561,7 +562,6 @@ class SIPClient:
         sess_id: str,
         ms: dict[int, dict[int, "RTP.PayloadType"]],
         sendtype: "RTP.TransmitType",
-        branch: str,
         call_id: str,
         response: SIPMessage | None = None,
     ) -> str:
@@ -581,8 +581,6 @@ class SIPClient:
             Dictionary of available audio media types.
         sendtype: RTP.TransmitType
             Type of transmission (sendrecv, sendonly, recvonly, inactive).
-        branch : str
-            Branch ID.
         call_id : str
             Call ID.
         response : SIPMessage
@@ -618,7 +616,7 @@ class SIPClient:
             v_addr=self.bind_ip,
             v_port=self.bind_port,
             rport=";rport",
-            branch=branch,  # self.gen_branch(),
+            branch=self.gen_branch(),
             f_name=self.user,
             f_user=self.user,
             f_domain=self.server,
@@ -626,6 +624,8 @@ class SIPClient:
             t_name=None,
             t_user=number,
             t_domain=self.server,
+            # unless we are re-inviting, no to_tag is known
+            t_tag=None,
             call_id=call_id,
             cseq_num=self.invite_counter.next(),
             c_user=self.user,
@@ -650,6 +650,74 @@ class SIPClient:
         invite_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
 
         return invite_request
+
+    def gen_ack(self, response: SIPMessage) -> str:
+        tag = self.tagLibrary[response.headers["Call-ID"]]
+        uri = response.headers["To"]["uri"]
+        ackMessage = f"ACK {uri} SIP/2.0\r\n"
+        ackMessage += self._gen_response_via_header(response)
+        ackMessage += "Max-Forwards: 70\r\n"
+        to = response.headers["To"]
+        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
+        ackMessage += f'To: {display_name}<{to["uri"]}>;tag={to["tag"]}\r\n'
+        _from = response.headers["From"]
+        display_name = f'"{_from["display-name"]}" ' if _from["display-name"] else ""
+        ackMessage += f'From: {display_name}<{_from["uri"]}>;tag={tag}\r\n'
+        ackMessage += f"Call-ID: {response.headers['Call-ID']}\r\n"
+        ackMessage += f"CSeq: {response.headers['CSeq']['check']} ACK\r\n"
+        ackMessage += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
+        ackMessage += "Content-Length: 0\r\n\r\n"
+        vars = dict(
+            method="ACK",
+            r_user=response.headers["To"]["user"],
+            r_domain=response.headers["To"]["host"],
+            v_proto=self.transport_mode,
+            v_addr=self.bind_ip,
+            v_port=self.bind_port,
+            rport=";rport",
+            # branch should be regenerated if 200 OK message arrives
+            # otherwise it should be the same as in the INVITE request
+            branch=response.headers["Via"][0]["branch"]
+            if response.status != SIPStatus(200)
+            else self.gen_branch(),
+            f_name=self.user,
+            f_user=self.user,
+            f_domain=self.server,
+            f_tag=self.tagLibrary[response.headers["Call-ID"]],
+            t_name=response.headers["To"]["display-name"],
+            t_user=response.headers["To"]["user"],
+            t_domain=response.headers["To"]["host"],
+            t_tag=response.headers["To"]["tag"],
+            call_id=response.headers["Call-ID"],
+            # cseq is not incremented in either case
+            cseq_num=response.headers["CSeq"]["check"],
+            # no need for contact in ACK
+            c_user=None,
+            c_domain=None,
+            c_port=None,
+            c_transport=None,
+            c_params=None,
+            # allow is not needed in ACK
+            allow=None,
+            # expires is not needed in ACK
+            expires=None,
+            user_agent=f"pyvoip {pyvoip.__version__}",
+            max_forwards=70,
+            # Content type/length should be used in late media
+            # No support as of yet, though
+            content_type=None,
+            content_length=None,
+            # Usually ACK is not authenticated
+            authorization=None
+            # if response is None
+            # else self.gen_authorization(response)[
+            #     15:
+            # ],  # strip Authorization:_ not to break compatibility
+            # body=None,
+        )
+        ack_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+
+        return ack_request
 
     def gen_subscribe(self, response: SIPMessage) -> str:
         subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
@@ -832,25 +900,6 @@ class SIPClient:
 
         return byeRequest
 
-    def gen_ack(self, request: SIPMessage) -> str:
-        tag = self.tagLibrary[request.headers["Call-ID"]]
-        uri = request.headers["To"]["uri"]
-        ackMessage = f"ACK {uri} SIP/2.0\r\n"
-        ackMessage += self._gen_response_via_header(request)
-        ackMessage += "Max-Forwards: 70\r\n"
-        to = request.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        ackMessage += f'To: {display_name}<{to["uri"]}>;tag={to["tag"]}\r\n'
-        _from = request.headers["From"]
-        display_name = f'"{_from["display-name"]}" ' if _from["display-name"] else ""
-        ackMessage += f'From: {display_name}<{_from["uri"]}>;tag={tag}\r\n'
-        ackMessage += f"Call-ID: {request.headers['Call-ID']}\r\n"
-        ackMessage += f"CSeq: {request.headers['CSeq']['check']} ACK\r\n"
-        ackMessage += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        ackMessage += "Content-Length: 0\r\n\r\n"
-
-        return ackMessage
-
     def _gen_options_response(self, request: SIPMessage) -> str:
         return self.gen_busy(request)
 
@@ -882,10 +931,9 @@ class SIPClient:
         ms: dict[int, dict[int, "RTP.PayloadType"]],
         sendtype: "RTP.TransmitType",
     ) -> tuple[SIPMessage, str, int]:
-        branch = "z9hG4bK" + self.gen_call_id()[0:25]
         call_id = self.gen_call_id()
         sess_id = self.sessID.next()
-        invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
+        invite = self.gen_invite(number, str(sess_id), ms, sendtype, call_id)
         self.recvLock.acquire()
         self.send_b(invite)
         debug("Invited")
@@ -910,7 +958,7 @@ class SIPClient:
         debug("Acknowledged")
 
         invite = self.gen_invite(
-            number, str(sess_id), ms, sendtype, branch, call_id, response=response
+            number, str(sess_id), ms, sendtype, call_id, response=response
         )
 
         self.send_b(invite)
