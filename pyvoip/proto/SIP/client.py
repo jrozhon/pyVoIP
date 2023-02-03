@@ -53,8 +53,8 @@ def fmt(msg_type: SIPMessageType, vars: dict[str, Any]) -> str:
         else SIPHeaderTemplate.RESPONSE.value
     )
     msg = t.render(**vars).lstrip().replace("\n", "\r\n")
-    print("Call of fmt function. Rendered msg:")
-    print(msg)
+    # print("Call of fmt function. Rendered msg:")
+    # print(msg)
     return msg
 
 
@@ -82,8 +82,8 @@ def fmt_body(vars: dict[str, Any], body_type: str = "SDP") -> str:
     # do not replace newlines here as they are going to
     # be replaced in fmt function.
     msg = t.render(**vars).lstrip()
-    print("Call of fmt_body function. Rendered msg:")
-    print(msg)
+    # print("Call of fmt_body function. Rendered msg:")
+    # print(msg)
     return msg
 
 
@@ -704,7 +704,7 @@ class SIPClient:
             # Content type/length should be used in late media
             # No support as of yet, though
             content_type=None,
-            content_length=None,
+            content_length=0,
             # Usually ACK is not authenticated
             authorization=None
             # if response is None
@@ -716,6 +716,107 @@ class SIPClient:
         ack_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
 
         return ack_request
+
+    def gen_bye(self, request: SIPMessage) -> str:
+        """
+        Format BYE request based on the request to the INVITE request.
+
+        !!!! Request actually contains information from the response as well in header.
+        !!!! I.e. request.headers["To"]["tag"] is not None or
+        !!!! request.headers["Contact"] contains destination.
+        !!!! This needs to be clarified.
+        !!!! Right now I just use the data.
+
+        Parameters
+        ----------
+        request : SIPMessage
+            SIP INVITE request that originated the call.
+
+        Returns
+        -------
+        str
+            Formatted BYE request.
+        """
+
+        # bye can go from the same side as the invite
+        # or from the other side. this affects the tags
+
+        # locally stored tag
+        tag = self.tagLibrary[request.headers["Call-ID"]]
+        # if local tag is the same as the tag from the From header,
+        # we initiated the call, so we need to use the tag from the To header
+        # otherwise we need to use the tag from the From header.
+
+        if request.headers["From"]["tag"] == tag:
+            f_tag = tag
+            t_tag = request.headers["To"]["tag"]
+            f_user = self.user
+            f_name = self.user
+            f_domain = self.server
+            t_name = request.headers["To"]["display-name"]
+            t_user = request.headers["To"]["user"]
+            t_domain = request.headers["To"]["host"]
+
+        else:
+            f_tag = request.headers["To"]["tag"]
+            t_tag = tag
+            t_user = self.user
+            t_name = self.user
+            t_domain = self.server
+            f_name = request.headers["To"]["display-name"]
+            f_user = request.headers["To"]["user"]
+            f_domain = request.headers["To"]["host"]
+
+        vars = dict(
+            method="BYE",
+            r_user=request.headers["Contact"]["user"],
+            r_domain=request.headers["Contact"]["host"],
+            r_port=request.headers["Contact"]["port"],
+            v_proto=self.transport_mode,
+            v_addr=self.bind_ip,
+            v_port=self.bind_port,
+            rport=";rport",
+            # branch should be regenerated if 200 OK message arrives
+            # otherwise it should be the same as in the INVITE request
+            branch=self.gen_branch(),
+            f_name=f_name,
+            f_user=f_user,
+            f_domain=f_domain,
+            f_tag=f_tag,
+            t_name=t_name,
+            t_user=t_user,
+            t_domain=t_domain,
+            t_tag=t_tag,
+            call_id=request.headers["Call-ID"],
+            # cseq is not incremented in either case
+            cseq_num=int(request.headers["CSeq"]["check"]) + 1,
+            # no need for contact in ACK
+            c_user=self.user,
+            c_domain=self.bind_ip,
+            c_port=self.bind_port,
+            c_transport=self.transport_mode,
+            c_params=None,
+            # allow is not needed in ACK
+            allow=", ".join(pyvoip.SIPCompatibleMethods),
+            # expires is not needed in ACK
+            expires=None,
+            user_agent=f"pyvoip {pyvoip.__version__}",
+            max_forwards=70,
+            # Content type/length should be used in late media
+            # No support as of yet, though
+            content_type=None,
+            content_length=0,
+            # Usually ACK is not authenticated
+            authorization=None
+            # if request is None
+            # else self.gen_authorization(request)[
+            #     15:
+            # ],  # strip Authorization:_ not to break compatibility
+            # body=None,
+        )
+        bye_request = fmt(msg_type=SIPMessageType.REQUEST, vars=vars)
+
+        return bye_request
 
     def gen_subscribe(self, response: SIPMessage) -> str:
         subRequest = f"SUBSCRIBE sip:{self.user}@{self.server} SIP/2.0\r\n"
@@ -868,35 +969,6 @@ class SIPClient:
         regRequest += body
 
         return regRequest
-
-    def gen_bye(self, request: SIPMessage) -> str:
-        tag = self.tagLibrary[request.headers["Call-ID"]]
-        c = request.headers["Contact"]["uri"]
-        byeRequest = f"BYE {c} SIP/2.0\r\n"
-        byeRequest += self._gen_response_via_header(request)
-        _from = request.headers["From"]
-        display_name = f'"{_from["display-name"]}" ' if _from["display-name"] else ""
-        fromH = f'{display_name}<{_from["uri"]}>'
-        to = request.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        toH = f'{display_name}<{to["uri"]}>'
-        if request.headers["From"]["tag"] == tag:
-            byeRequest += f"From: {fromH};tag={tag}\r\n"
-            byeRequest += f"To: {to['raw']};tag={to['tag']}\r\n"
-        else:
-            byeRequest += f"To: {_from['raw']}\r\n"
-            byeRequest += f"From: {toH};tag={tag}\r\n"
-        byeRequest += f"Call-ID: {request.headers['Call-ID']}\r\n"
-        cseq = int(request.headers["CSeq"]["check"]) + 1
-        byeRequest += f"CSeq: {cseq} BYE\r\n"
-        byeRequest += (
-            "Contact: " + f"<sip:{self.user}@{self.bind_ip}:{self.bind_port}>\r\n"
-        )
-        byeRequest += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        byeRequest += f"Allow: {(', '.join(pyvoip.SIPCompatibleMethods))}\r\n"
-        byeRequest += "Content-Length: 0\r\n\r\n"
-
-        return byeRequest
 
     def _gen_options_response(self, request: SIPMessage) -> str:
         return self.gen_busy(request)

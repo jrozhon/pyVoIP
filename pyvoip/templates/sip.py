@@ -17,7 +17,7 @@ CSeq: {{ cseq_num }} {{ method }}
 {%- if user_agent %}{{"\n"}}User-Agent: {{ user_agent }}{% endif %}
 {%- if max_forwards %}{{"\n"}}Max-Forwards: {{ max_forwards }}{% endif %}
 {%- if content_type %}{{"\n"}}Content-Type: {{ content_type }}{% endif %}
-{%- if content_length %}{{"\n"}}Content-Length: {{ content_length }}{% endif %}
+{%- if content_length is not none %}{{"\n"}}Content-Length: {{ content_length }}{% endif %}
 {%- if authorization %}{{"\n"}}Authorization: {{ authorization }}{% endif %}
 {%- if body %}{{"\n\n"}}{{ body }}{% endif %}
 """
@@ -36,7 +36,7 @@ CSeq: {{ cseq_num }} {{ method }}
 {%- if user_agent %}{{"\n"}}User-Agent: {{ user_agent }}{% endif %}
 {%- if max_forwards %}{{"\n"}}Max-Forwards: {{ max_forwards }}{% endif %}
 {%- if content_type %}{{"\n"}}Content-Type: {{ content_type }}{% endif %}
-{%- if content_length %}{{"\n"}}Content-Length: {{ content_length }}{% endif %}
+{%- if content_length is not none %}{{"\n"}}Content-Length: {{ content_length }}{% endif %}
 {%- if www_auth %}{{"\n"}}WWW-Authenticate: {{ www_auth }}{% endif %}
 {%- if body %}{{"\n\n"}}{{ body }}{% endif %}
 """
