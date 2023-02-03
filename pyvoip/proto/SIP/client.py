@@ -652,21 +652,19 @@ class SIPClient:
         return invite_request
 
     def gen_ack(self, response: SIPMessage) -> str:
-        tag = self.tagLibrary[response.headers["Call-ID"]]
-        uri = response.headers["To"]["uri"]
-        ackMessage = f"ACK {uri} SIP/2.0\r\n"
-        ackMessage += self._gen_response_via_header(response)
-        ackMessage += "Max-Forwards: 70\r\n"
-        to = response.headers["To"]
-        display_name = f'"{to["display-name"]}" ' if to["display-name"] else ""
-        ackMessage += f'To: {display_name}<{to["uri"]}>;tag={to["tag"]}\r\n'
-        _from = response.headers["From"]
-        display_name = f'"{_from["display-name"]}" ' if _from["display-name"] else ""
-        ackMessage += f'From: {display_name}<{_from["uri"]}>;tag={tag}\r\n'
-        ackMessage += f"Call-ID: {response.headers['Call-ID']}\r\n"
-        ackMessage += f"CSeq: {response.headers['CSeq']['check']} ACK\r\n"
-        ackMessage += f"User-Agent: pyvoip {pyvoip.__version__}\r\n"
-        ackMessage += "Content-Length: 0\r\n\r\n"
+        """
+        Format ACK request based on the response to the INVITE request.
+
+        Parameters
+        ----------
+        response : SIPMessage
+            SIP response to INVITE request.
+
+        Returns
+        -------
+        str
+            Formatted ACK request.
+        """
         vars = dict(
             method="ACK",
             r_user=response.headers["To"]["user"],
@@ -953,8 +951,8 @@ class SIPClient:
             self.recvLock.release()
             return SIPMessage(invite.encode("utf8")), call_id, sess_id
         debug(f"Received Response: {response.summary()}")
-        ack = self.gen_ack(response)
-        self.send_b(ack)
+
+        self.ack(response)
         debug("Acknowledged")
 
         invite = self.gen_invite(
@@ -966,6 +964,42 @@ class SIPClient:
         self.recvLock.release()
 
         return SIPMessage(invite.encode("utf8")), call_id, sess_id
+
+    def ack(self, response: SIPMessage) -> None:
+        """
+        Manage ACK for outgoing INVITES. In SIP this message can be routed
+        based on the Record-Route header and Contact header. This function
+        will handle that routing.
+
+        Parameters
+        ----------
+        response : SIPMessage
+            Received SIP Response. Usually 200 OK.
+
+        Returns
+        -------
+        None
+        """
+        ack = self.gen_ack(response)
+        # handle negative responses first
+        # these are negotiated with server
+        if response.status != SIPStatus(200):
+            self.send_b(ack)
+        # then move on to positive responses
+        # right now, only 200 OK will be handled
+        else:
+            if "Record-Route" in response.headers.keys():
+                self.send_b(
+                    ack,
+                    response.headers["Record-Route"][0]["address"],
+                    response.headers["Record-Route"][0]["port"],
+                )
+            else:
+                self.send_b(
+                    ack,
+                    response.headers["Contact"]["host"],
+                    response.headers["Contact"]["port"],
+                )
 
     def bye(self, request: SIPMessage) -> None:
         message = self.gen_bye(request)
