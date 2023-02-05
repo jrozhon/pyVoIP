@@ -49,11 +49,17 @@ class CallState(str, Enum):
 
 
 class PhoneStatus(str, Enum):
-    INACTIVE = "INACTIVE"
-    REGISTERING = "REGISTERING"
-    REGISTERED = "REGISTERED"
-    DEREGISTERING = "DEREGISTERING"
-    FAILED = "FAILED"
+    INACTIVE = "INACTIVE"  # Phone was instantiated but not started, or was stopped.
+    CONNECTING = "CONNECTING"  # Phone tries to bind to the network.
+    CONNECTED = "CONNECTED"  # Phone is bound to the network.
+    REGISTERING = "REGISTERING"  # Phone is trying to register with the SIP server.
+    REGISTERED = "REGISTERED"  # Phone is registered with the SIP server.
+    DEREGISTERING = (
+        "DEREGISTERING"  # Phone is trying to deregister with the SIP server.
+    )
+    FAILED = (
+        "FAILED"  # Phone failed to bind to the network or register with the SIP server.
+    )
 
 
 class VoIPCall:
@@ -713,11 +719,38 @@ class VoIPPhone:
     def start(self) -> None:
         if TRACE:
             ic()
-        self._status = PhoneStatus.REGISTERING
+        self._status = PhoneStatus.CONNECTING
+        # self._status = PhoneStatus.REGISTERING
         try:
             self.sip.start()
-            self._status = PhoneStatus.REGISTERED
+            self._status = PhoneStatus.CONNECTED
             self.NSD = True
+        except Exception:
+            self._status = PhoneStatus.FAILED
+            self.sip.stop()
+            self.NSD = False
+            raise
+
+    def register(self) -> None:
+        """
+        Perform the registration process on user demand and not automatically.
+        This can be used when registration is not needed.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        Exception
+            [TODO:description]
+        """
+        if TRACE:
+            ic()
+        self._status = PhoneStatus.REGISTERING
+        try:
+            self.sip.register()
+            self._status = PhoneStatus.REGISTERED
         except Exception:
             self._status = PhoneStatus.FAILED
             self.sip.stop()

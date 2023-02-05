@@ -290,7 +290,9 @@ class SIPClient:
             # self.out = ctx.wrap_socket(self.out)
         self.s.bind((self.bind_ip, self.bind_port))
         self.out = self.s
-        self.register()
+
+    def register(self) -> None:
+        self.do_register()
         t = Timer(1, self.recv)
         t.name = "SIP Receive"
         t.start()
@@ -1185,7 +1187,26 @@ class SIPClient:
         self.recvLock.release()
         return False
 
-    def register(self) -> bool:
+    def do_register(self) -> bool:
+        """
+        Tries to register the UA with the SIP Server.
+
+        Returns
+        -------
+        bool
+            True if registration was successful, False otherwise.
+
+        Raises
+        ------
+        TimeoutError:
+            [TODO:description]
+        InvalidAccountInfoError:
+            [TODO:description]
+        TimeoutError:
+            [TODO:description]
+        InvalidAccountInfoError:
+            [TODO:description]
+        """
         if TRACE:
             ic()
         self.recvLock.acquire()
@@ -1264,7 +1285,7 @@ class SIPClient:
             if response.status == SIPStatus(500):
                 self.recvLock.release()
                 time.sleep(5)
-                return self.register()
+                return self.do_register()
             else:
                 # TODO: determine if needed here
                 self.parse_message(response)
