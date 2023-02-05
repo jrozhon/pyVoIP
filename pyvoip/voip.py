@@ -251,6 +251,13 @@ class VoIPCall:
         self.dtmfLock.release()
         return packet
 
+    def send_dtmf(self, code: str) -> None:
+        if TRACE:
+            ic()
+        for x in self.RTPClients:
+            # DTMF is actually a hexademical number
+            x.outgoing_dtmf.append(str(code).encode("utf-8"))
+
     def gen_ms(self) -> dict[int, dict[int, RTP.PayloadType]]:
         """
         Generate m SDP attribute for answering originally and
@@ -431,6 +438,38 @@ class VoIPCall:
             del self.phone.calls[self.request.headers["Call-ID"]]
 
     def write_audio(self, data: bytes) -> None:
+        """
+        This method is used to write audio to the RTP clients.
+        Audio must be in the format of a bytes object.
+        Linear PCM 16-bit, 8kHz, mono is the required format.
+
+        There is an addition to allow for sending DTMF codes,
+        but it is a rather naive approach and should be handled
+        separately.
+
+        In case of DTMF, there are 4 key events with first
+        having the Marker set to True (1) and the rest set to False (0).
+        Timestamp is not incremented, but the sequence number is. Event
+        duration is updated as well.
+
+        Then, there are 3 key events with end of event set to True (1).
+        First one, updates the timestamp and the Event duration. The
+        remaining two are just repetitions.
+
+
+        Parameters
+        ----------
+        data
+            Bytes object of audio data
+
+        dtmf
+            Bytes object of DTMF codes. Actually just one key and the
+            RTP client will handle the rest.
+
+        Returns
+        -------
+        None
+        """
         if TRACE:
             ic()
         for x in self.RTPClients:

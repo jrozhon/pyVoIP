@@ -9,6 +9,8 @@ from enum import Enum
 from threading import Timer
 from typing import Callable, Optional
 
+from icecream import ic
+
 import pyvoip
 
 __all__ = [
@@ -25,6 +27,7 @@ __all__ = [
 
 
 debug = pyvoip.debug
+TRACE = pyvoip.TRACE
 
 
 def byte_to_bits(byte: bytes) -> str:
@@ -150,12 +153,15 @@ class PayloadType(Enum):
     H263 = 34, 90000, 0, "H263"
 
     # Non-codec
-    EVENT = "telephone-event", 8000, 0, "telephone-event"
+    EVENT = 101, 8000, 0, "telephone-event"
+    # EVENT = "telephone-event", 8000, 0, "telephone-event"
     UNKNOWN = "UNKNOWN", 0, 0, "UNKNOWN CODEC"
 
 
 class RTPPacketManager:
     def __init__(self):
+        if TRACE:
+            ic()
         self.offset = 4294967296
         """
         The largest number storable in 4 bytes + 1. This will ensure the
@@ -172,8 +178,14 @@ class RTPPacketManager:
             time.sleep(0.01)
         self.bufferLock.acquire()
         packet = self.buffer.read(length)
+
+        # most probably it is DTMF, so do not append 0x80
+        # it will not work in all cases, but it should be ok
+        # for testing
         if len(packet) < length:
             packet = packet + (b"\x80" * (length - len(packet)))
+        # else:
+        #     raise RTPParseError("Packet is too large")
         self.bufferLock.release()
         return packet
 
@@ -192,6 +204,8 @@ class RTPPacketManager:
         self.rebuilding = False
 
     def write(self, offset: int, data: bytes) -> None:
+        if TRACE:
+            ic()
         self.bufferLock.acquire()
         self.log[offset] = data
         bufferloc = self.buffer.tell()
@@ -218,6 +232,8 @@ class RTPPacketManager:
 
 class RTPMessage:
     def __init__(self, data: bytes, assoc: dict[int, PayloadType]):
+        if TRACE:
+            ic()
         self.RTPCompatibleVersions = pyvoip.RTPCompatibleVersions
         self.assoc = assoc
         # Setting defaults to stop mypy from complaining
@@ -234,6 +250,8 @@ class RTPMessage:
         self.parse(data)
 
     def summary(self) -> str:
+        if TRACE:
+            ic()
         data = ""
         data += f"Version: {self.version}\n"
         data += f"Padding: {self.padding}\n"
@@ -247,6 +265,8 @@ class RTPMessage:
         return data
 
     def parse(self, packet: bytes) -> None:
+        if TRACE:
+            ic()
         byte = byte_to_bits(packet[0:1])
         self.version = int(byte[0:2], 2)
         if self.version not in self.RTPCompatibleVersions:
@@ -298,6 +318,8 @@ class RTPClient:
         sendrecv: TransmitType,
         dtmf: Optional[Callable[[str], None]] = None,
     ):
+        if TRACE:
+            ic()
         self.NSD = True
         # Example: {0: PayloadType.PCMU, 101: PayloadType.EVENT}
         self.assoc = assoc
@@ -330,8 +352,25 @@ class RTPClient:
         self.outSequence = random.randint(1, 100)
         self.outTimestamp = random.randint(1, 10000)
         self.outSSRC = random.randint(1000, 65530)
+        self._outgoing_dtmf: list[bytes] = []
+        self._preference = PayloadType.UNKNOWN
+        self.processing_dtmf = False # signaling if the outgoing audio is DTMF or standard audio
+
+    @property
+    def outgoing_dtmf(self) -> list[bytes]:
+        if TRACE:
+            ic()
+        return self._outgoing_dtmf
+
+    @outgoing_dtmf.setter
+    def outgoing_dtmf(self, value: list[bytes]) -> None:
+        if TRACE:
+            ic()
+        self._outgoing_dtmf = value
 
     def start(self) -> None:
+        if TRACE:
+            ic()
         self.sin = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sout = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sin.bind((self.in_ip, self.in_port))
@@ -345,6 +384,8 @@ class RTPClient:
         t.start()
 
     def stop(self) -> None:
+        if TRACE:
+            ic()
         self.NSD = False
         self.sin.close()
         self.sout.close()
@@ -375,9 +416,29 @@ class RTPClient:
                 pass
 
     def trans(self) -> None:
+        """
+        DTMF needs to be handled differently.
+        """
         while self.NSD:
             last_sent = time.monotonic_ns()
-            payload = self.pmout.read()
+            if self.processing_dtmf:
+                payload = self.outgoing_dtmf.pop(0)
+                
+            else:
+                
+                if self.outgoing_dtmf:
+                    self.processing_dtmf = True
+
+
+
+
+                self._preference = self.preference
+                self.preference = PayloadType.EVENT
+                print(f"Sending DTMF: {self.outgoing_dtmf}")
+                payload = self.outgoing_dtmf.pop(0)
+                print("xxxxxx", payload)
+            else:
+                payload = self.pmout.read()
             payload = self.encode_packet(payload)
             packet = b"\x80"  # RFC 1889 V2 No Padding Extension or CC.
             packet += chr(int(self.preference)).encode("utf8")
@@ -413,6 +474,24 @@ class RTPClient:
             )
             time.sleep(sleep_time / self.trans_delay_reduction)
 
+    def trans_audio(self) -> None:
+
+
+    def trans_dtmf(self, repeat_dtmf: int = 4, repeat_eoe: int = 3) -> bool:
+        if TRACE:
+            ic()
+        if self.outgoing_dtmf:
+            self._preference = self.preference
+            self.preference = PayloadType.EVENT
+            payload = self.outgoing_dtmf.pop(0)
+            for _ in range(repeat_dtmf):
+                self.encode_packet(payload)
+            for _ in range(repeat_eoe):
+                self.encode_packet(b"\x00")
+            self.preference = self._preference
+            return True
+        return False
+
     @property
     def trans_delay_reduction(self) -> float:
         reduction = pyvoip.TRANSMIT_DELAY_REDUCTION + 1
@@ -434,6 +513,8 @@ class RTPClient:
             return self.encode_pcmu(payload)
         elif self.preference == PayloadType.PCMA:
             return self.encode_pcma(payload)
+        elif self.preference == PayloadType.EVENT:
+            return self.encode_telephone_event(payload)
         else:
             raise RTPParseError("Unsupported codec (encode): " + str(self.preference))
 
@@ -491,3 +572,22 @@ class RTPClient:
         if packet.marker:
             if self.dtmf is not None:
                 self.dtmf(event)
+
+    def encode_telephone_event(
+        self,
+        dtmf_key: bytes,
+        end_of_event: bool = False,  # end of DTMF event per RFC 4733
+        reserved: int = 0,  # reserved bit
+        volume: int = 10,
+        event_duration: int = 160,
+    ) -> bytes:
+        if TRACE:
+            ic()
+        # first DTMF event should have marker bit set
+        payload = dtmf_key  # one byte
+        payload += int(f"{end_of_event:1b}{reserved:1b}{volume:>06b}").to_bytes(
+            1, "big"
+        )  # one byte
+        payload += event_duration.to_bytes(2, "big")  # two bytes
+        print(payload)
+        return payload
