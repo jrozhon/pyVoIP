@@ -389,7 +389,17 @@ class VoIPCall:
         if self.request.headers["Call-ID"] in self.phone.calls:
             del self.phone.calls[self.request.headers["Call-ID"]]
 
-    def bye(self) -> None:
+    def on_bye(self) -> None:
+        """
+        Closes the RTP ports and sets the call state to CallState.ENDED.
+        It is meant to be used by the UAS when it receives a BYE request.
+        The response is then handled further in the flow of SIP client.
+        Should not be called byt the user.
+
+        Returns
+        -------
+        None
+        """
         if TRACE:
             ic()
         if self.state == CallState.ANSWERED:
@@ -622,7 +632,7 @@ class VoIPPhone:
         call_id = request.headers["Call-ID"]
         if call_id not in self.calls:
             return
-        self.calls[call_id].bye()
+        self.calls[call_id].on_bye()
 
     def _callback_MSG_Options(self, request: SIP.SIPMessage) -> str:
         if TRACE:

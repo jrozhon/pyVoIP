@@ -1091,6 +1091,18 @@ class SIPClient:
                 )
 
     def bye(self, request: SIPMessage) -> None:
+        """
+        Sends Bye to other party to terminate the call. This is for UAC only.
+
+        Parameters
+        ----------
+        request
+            Message container that has the information about the call so far.
+
+        Returns
+        -------
+        None
+        """
         if TRACE:
             ic()
         message = self.gen_bye(request)
