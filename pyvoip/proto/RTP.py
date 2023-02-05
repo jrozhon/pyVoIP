@@ -50,13 +50,13 @@ class RTPParseError(Exception):
     pass
 
 
-class RTPProtocol(Enum):
+class RTPProtocol(str, Enum):
     UDP = "udp"
     AVP = "RTP/AVP"
     SAVP = "RTP/SAVP"
 
 
-class TransmitType(Enum):
+class TransmitType(str, Enum):
     RECVONLY = "recvonly"
     SENDRECV = "sendrecv"
     SENDONLY = "sendonly"

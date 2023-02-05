@@ -41,14 +41,14 @@ class NoPortsAvailableError(Exception):
     pass
 
 
-class CallState(Enum):
+class CallState(str, Enum):
     DIALING = "DIALING"
     RINGING = "RINGING"
     ANSWERED = "ANSWERED"
     ENDED = "ENDED"
 
 
-class PhoneStatus(Enum):
+class PhoneStatus(str, Enum):
     INACTIVE = "INACTIVE"
     REGISTERING = "REGISTERING"
     REGISTERED = "REGISTERED"
