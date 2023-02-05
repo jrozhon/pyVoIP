@@ -75,6 +75,7 @@ class VoIPCall:
     ):
         if TRACE:
             ic()
+        self._state = None
         self.state = callstate
         self.phone = phone
         self.sip = self.phone.sip
@@ -190,6 +191,20 @@ class VoIPCall:
             for m in self.ms:
                 self.port = m
                 self.assignedPorts[m] = self.ms[m]
+
+    @property
+    def state(self) -> CallState:
+        return self._state
+
+    @state.setter
+    def state(self, value: CallState) -> None:
+        if TRACE:
+            ic()
+        self._state = value
+        if TRACE:
+            print(
+                f"[bright_black]Call state changed to: [/bright_black][red]{value}[/red]"
+            )
 
     def create_rtp_clients(
         self,
@@ -481,7 +496,8 @@ class VoIPPhone:
             server=server,
         )
         self.call_callback = call_callback
-        self._status = PhoneStatus.INACTIVE
+        self._status = None
+        self.status = PhoneStatus.INACTIVE
         self.transport_mode = transport_mode
 
         # "recvonly", "sendrecv", "sendonly", "inactive"
@@ -502,6 +518,47 @@ class VoIPPhone:
             call_callback=self.callback,  # this is just a reference to the callback method
             transport_mode=self.transport_mode,
         )
+
+    @property
+    def status(self) -> PhoneStatus:
+        """
+        Get phone status. A replacement for the original get_status method.
+
+        Parameters
+        ----------
+        self : VoIPPhone
+
+        Returns
+        -------
+        PhoneStatus
+        """
+        if TRACE:
+            ic()
+        return self._status
+
+    @status.setter
+    def status(self, value: PhoneStatus) -> None:
+        """
+        Set phone status. Allows for hooks that can be used for asynchronous monitoring
+        of the phone's status.
+
+        Parameters
+        ----------
+        self : VoIPPhone
+        value
+            The new status of the phone.
+
+        Returns
+        -------
+        None
+        """
+        if TRACE:
+            ic()
+        self._status = value
+        if TRACE:
+            print(
+                f"[bright_black]Phone status changed to: [/bright_black][red]{value}[/red]"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         if TRACE:
@@ -526,7 +583,7 @@ class VoIPPhone:
             "transport_mode": self.transport_mode,
             "rtp_port_low": self.rtp_port_low,
             "rtp_port_high": self.rtp_port_high,
-            "status": self.get_status(),
+            "status": self.status,
             "calls": len(self.calls),
         }
 
@@ -566,11 +623,6 @@ class VoIPPhone:
             elif request.status == SIP.SIPStatus.SERVICE_UNAVAILABLE:
                 self._callback_RESP_Unavailable(request)
         return None  # mypy needs this for some reason.
-
-    def get_status(self) -> PhoneStatus:
-        if TRACE:
-            ic()
-        return self._status
 
     def _callback_MSG_Invite(self, request: SIP.SIPMessage) -> None:
         if TRACE:
@@ -700,12 +752,22 @@ class VoIPPhone:
         self.sip.send_b(ack)
 
     def _create_Call(self, request: SIP.SIPMessage, sess_id: int) -> None:
+        """
+        Create a new VoIPCall object for the incoming call. Acting as UAS.
+
+        Parameters
+        ----------
+        request: SIP.SIPMessage
+            Request that originated the call.
+        sess_id: int
+            Internal session id.
+
+        Returns
+        -------
+        None
+        """
         if TRACE:
             ic()
-        """
-        Create VoIP call object. Should be separated to enable better
-        subclassing.
-        """
         call_id = request.headers["Call-ID"]
         self.calls[call_id] = VoIPCall(
             self,
@@ -719,14 +781,14 @@ class VoIPPhone:
     def start(self) -> None:
         if TRACE:
             ic()
-        self._status = PhoneStatus.CONNECTING
+        self.status = PhoneStatus.CONNECTING
         # self._status = PhoneStatus.REGISTERING
         try:
             self.sip.start()
-            self._status = PhoneStatus.CONNECTED
+            self.status = PhoneStatus.CONNECTED
             self.NSD = True
         except Exception:
-            self._status = PhoneStatus.FAILED
+            self.status = PhoneStatus.FAILED
             self.sip.stop()
             self.NSD = False
             raise
@@ -747,12 +809,12 @@ class VoIPPhone:
         """
         if TRACE:
             ic()
-        self._status = PhoneStatus.REGISTERING
+        self.status = PhoneStatus.REGISTERING
         try:
             self.sip.register()
-            self._status = PhoneStatus.REGISTERED
+            self.status = PhoneStatus.REGISTERED
         except Exception:
-            self._status = PhoneStatus.FAILED
+            self.status = PhoneStatus.FAILED
             self.sip.stop()
             self.NSD = False
             raise
@@ -760,20 +822,40 @@ class VoIPPhone:
     def stop(self) -> None:
         if TRACE:
             ic()
-        self._status = PhoneStatus.DEREGISTERING
+        self.status = PhoneStatus.DEREGISTERING
         for x in self.calls.copy():
             try:
                 self.calls[x].hangup()
             except InvalidStateError:
                 pass
         self.sip.stop()
-        self._status = PhoneStatus.INACTIVE
+        self.status = PhoneStatus.INACTIVE
 
     def call(
         self,
         number: str,
         payload_types: Optional[list[RTP.PayloadType]] = None,
     ) -> VoIPCall:
+        """
+        Call a number/name. This will create a new VoIPCall object. Acting as UAC.
+
+        Parameters
+        ----------
+        number: str
+            Number or name to call.
+        payload_types: Optional[list[RTP.PayloadType]], optional
+            Payload types to use, by default None.
+
+        Returns
+        -------
+        VoIPCall
+            VoIPCall object.
+
+        Raises
+        ------
+        RuntimeError:
+            [TODO:description]
+        """
         if TRACE:
             ic()
         port = self.request_port()

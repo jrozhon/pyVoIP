@@ -117,6 +117,19 @@ class SIPClient:
         """
         Send a message to the server. This is the replacement for recurrent
         self.out.sendto calls to allow to check on messages being sent out.
+
+        Parameters
+        ----------
+        message: SIPMessage
+            The message to be sent.
+        dst
+            The destination IP address/host name.
+        dst_port
+            The destination port.
+
+        Returns
+        -------
+        None
         """
         if TRACE:
             ic()
@@ -126,8 +139,7 @@ class SIPClient:
 
         print(f"----> {dst}:{dst_port}")
         print(message, end="\n")
-        print(message.encode("utf-8"), end="\n")
-        # print(message.encode("utf8"), end="\n")
+        # print(message.encode("utf-8"), end="\n")
 
         try:
             self.out.sendto(message.encode("utf8"), (dst, dst_port))
@@ -142,10 +154,22 @@ class SIPClient:
         self.s.recv calls to allow to check on messages being received.
 
         Don't trace here as it will generate a lot of output.
+
+        Parameters
+        ----------
+        buffsize: int
+            The buffer size to be used.
+
+        Returns
+        -------
+        bytes
+            The received message.
         """
 
         raw, (addr, port) = self.s.recvfrom(buffsize)
         try:
+            if TRACE:
+                ic()
             print(f"<---- {addr}:{port}")
             print(raw.decode("utf8"), end="\n")
         except Exception as ex:
