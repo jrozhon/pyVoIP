@@ -10,6 +10,8 @@ from threading import Timer
 from typing import Callable, Optional
 
 from icecream import ic
+from pydantic import BaseModel
+from rich import print
 
 import pyvoip
 
@@ -51,6 +53,20 @@ class DynamicPayloadType(Exception):
 
 class RTPParseError(Exception):
     pass
+
+
+class DTMFEventPayload(BaseModel):
+    payload: bytes = b""
+    marker: bool = False
+    update_sequence: bool = True
+    update_timestamp: bool = True
+
+
+class DTMFEvent(BaseModel):
+    event: list[DTMFEventPayload] = []
+
+    def add_payload(self, payload: DTMFEventPayload) -> None:
+        self.event.append(payload)
 
 
 class RTPProtocol(str, Enum):
@@ -179,9 +195,7 @@ class RTPPacketManager:
         self.bufferLock.acquire()
         packet = self.buffer.read(length)
 
-        # most probably it is DTMF, so do not append 0x80
-        # it will not work in all cases, but it should be ok
-        # for testing
+        # If the packet is too small, pad it with 0x80
         if len(packet) < length:
             packet = packet + (b"\x80" * (length - len(packet)))
         # else:
@@ -352,18 +366,17 @@ class RTPClient:
         self.outSequence = random.randint(1, 100)
         self.outTimestamp = random.randint(1, 10000)
         self.outSSRC = random.randint(1000, 65530)
-        self._outgoing_dtmf: list[bytes] = []
-        self._preference = PayloadType.UNKNOWN
-        self.processing_dtmf = False # signaling if the outgoing audio is DTMF or standard audio
+        self._outgoing_dtmf: list[str] = []  # A container for DTMF events
+        self._preference = PayloadType.UNKNOWN  # Initial value of _preference
 
     @property
-    def outgoing_dtmf(self) -> list[bytes]:
+    def outgoing_dtmf(self) -> list[str]:
         if TRACE:
             ic()
         return self._outgoing_dtmf
 
     @outgoing_dtmf.setter
-    def outgoing_dtmf(self, value: list[bytes]) -> None:
+    def outgoing_dtmf(self, value: list[str]) -> None:
         if TRACE:
             ic()
         self._outgoing_dtmf = value
@@ -379,7 +392,7 @@ class RTPClient:
         r = Timer(0, self.recv)
         r.name = "RTP Receiver"
         r.start()
-        t = Timer(0, self.trans)
+        t = Timer(0, self.transmit_audio)
         t.name = "RTP Transmitter"
         t.start()
 
@@ -415,30 +428,25 @@ class RTPClient:
             except OSError:
                 pass
 
-    def trans(self) -> None:
+    def transmit_audio(self) -> None:
         """
-        DTMF needs to be handled differently.
+        This method constructs RTP packets from encoded audio data and
+        transmits them to the remote host.
+        When there is content in self.outgoing_dtmf list, it pauses
+        and jumps to separate self.transmit_dtmf method to handle
+        the event. When the event is finished, it resumes transmitting
+        audio.
+
+
+        Returns
+        -------
+        None
         """
         while self.NSD:
+            if self.outgoing_dtmf:
+                self.transmit_dtmf()
             last_sent = time.monotonic_ns()
-            if self.processing_dtmf:
-                payload = self.outgoing_dtmf.pop(0)
-                
-            else:
-                
-                if self.outgoing_dtmf:
-                    self.processing_dtmf = True
-
-
-
-
-                self._preference = self.preference
-                self.preference = PayloadType.EVENT
-                print(f"Sending DTMF: {self.outgoing_dtmf}")
-                payload = self.outgoing_dtmf.pop(0)
-                print("xxxxxx", payload)
-            else:
-                payload = self.pmout.read()
+            payload = self.pmout.read()
             payload = self.encode_packet(payload)
             packet = b"\x80"  # RFC 1889 V2 No Padding Extension or CC.
             packet += chr(int(self.preference)).encode("utf8")
@@ -474,23 +482,97 @@ class RTPClient:
             )
             time.sleep(sleep_time / self.trans_delay_reduction)
 
-    def trans_audio(self) -> None:
+    def transmit_dtmf(self) -> None:
+        """
+        This method handles sending the DTMF events to the remote host.
+        It works the same as transmit_audio, but it uses the DTMF
+        generator to construct the RTP packets.
 
 
-    def trans_dtmf(self, repeat_dtmf: int = 4, repeat_eoe: int = 3) -> bool:
+        Returns
+        -------
+        None
+        """
         if TRACE:
             ic()
-        if self.outgoing_dtmf:
-            self._preference = self.preference
-            self.preference = PayloadType.EVENT
-            payload = self.outgoing_dtmf.pop(0)
-            for _ in range(repeat_dtmf):
-                self.encode_packet(payload)
-            for _ in range(repeat_eoe):
-                self.encode_packet(b"\x00")
-            self.preference = self._preference
-            return True
-        return False
+        # take the first recorded event
+        event = self.outgoing_dtmf.pop(0)
+        # generate payloads for the event
+        dtmf_event = self.gen_telephone_event(event)
+
+        # store the original preference
+        self._preference = self.preference
+        self.preference = PayloadType.EVENT
+
+        # take the global timestamp and use it locally
+        # as no DTMF packet increases it,
+        # but the following audio packets  take the
+        # gap into account
+        timestamp = self.outTimestamp
+
+        # iterate over individual payloads/packets
+        for dtmf_event_payload in dtmf_event.event:
+            last_sent = time.monotonic_ns()
+
+            print(
+                f"[bright_black]Sending DTMF: [/bright_black][red]{event}[/red]. "
+                f"[bright_black]Payload: [/bright_black][green]{dtmf_event_payload}[/green]"
+            )
+            packet = b"\x80"  # RFC 1889 V2 No Padding Extension or CC.
+
+            # add 128 which equals to 1000 0000 in binary
+            # as a marker for the firts packet of the DTMF event
+            if dtmf_event_payload.marker:
+                packet += (int(self.preference) + 128).to_bytes(1, byteorder="big")
+            else:
+                packet += int(self.preference).to_bytes(1, byteorder="big")
+
+            # sequence number
+            try:
+                packet += self.outSequence.to_bytes(2, byteorder="big")
+            except OverflowError:
+                self.outSequence = 0
+            try:
+                packet += self.outTimestamp.to_bytes(4, byteorder="big")
+            except OverflowError:
+                self.outTimestamp = 0
+            packet += self.outSSRC.to_bytes(4, byteorder="big")
+            packet += dtmf_event_payload.payload
+
+            # debug(payload)
+
+            try:
+                self.sout.sendto(packet, (self.out_ip, self.out_port))
+            except OSError:
+                warnings.warn(
+                    "RTP Packet failed to send!",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
+            # if there is a mark to update the sequence in the payload
+            # then update it.
+            # End of event packets do not update sequence.
+            if dtmf_event_payload.update_sequence:
+                self.outSequence += 1
+
+            # if there is a mark to update the timestamp in the payload
+            # then update it. Only the first packet of the event does it.
+
+            if dtmf_event_payload.update_timestamp:
+                timestamp += 160  # this is default timestamp clock of PCMA/PCMU, should be parameterized
+            # Calculate how long it took to generate this packet.
+            # Then how long we should wait to send the next, then devide by 2.
+            delay = (1 / self.preference.rate) * 160
+            sleep_time = max(
+                0, delay - ((time.monotonic_ns() - last_sent) / 1000000000)
+            )
+            time.sleep(sleep_time / self.trans_delay_reduction)
+
+        # set the preference back to the original one
+        self.preference = self._preference
+        self.outTimestamp = timestamp
+        return
 
     @property
     def trans_delay_reduction(self) -> float:
@@ -513,8 +595,6 @@ class RTPClient:
             return self.encode_pcmu(payload)
         elif self.preference == PayloadType.PCMA:
             return self.encode_pcma(payload)
-        elif self.preference == PayloadType.EVENT:
-            return self.encode_telephone_event(payload)
         else:
             raise RTPParseError("Unsupported codec (encode): " + str(self.preference))
 
@@ -573,21 +653,110 @@ class RTPClient:
             if self.dtmf is not None:
                 self.dtmf(event)
 
-    def encode_telephone_event(
+    def gen_telephone_event(
         self,
-        dtmf_key: bytes,
-        end_of_event: bool = False,  # end of DTMF event per RFC 4733
-        reserved: int = 0,  # reserved bit
+        event: str,
+        event_repetition: int = 4,
+        end_of_event_retransmission: int = 3,
+        timestamp_len: int = 160,
         volume: int = 10,
-        event_duration: int = 160,
-    ) -> bytes:
+    ) -> DTMFEvent:
+        """
+        Generate sequence of payloads together with mark that are used by the RTP.
+        Payloads are compliant to RFC 4733 specification for DTMF events.
+
+
+        Parameters
+        ----------
+        event: str
+            String representation of DTMF code.
+        event_repetition: int
+            How many times should the event be repeated. This means how many
+            RTP packets will be generated without the end of event mark.
+        end_of_event_retransmission: int
+            How many times should the end of event be repeated. This means how many
+            RTP packets will be generated with the end of event mark.
+        timestamp_len: int
+            The duration of Timestamp unit. For PCM, it is usually 160 (with packetization of 20ms).
+            For other codecs, it might be different.
+        volume
+            Volume of the event. It is a 6-bit unsigned integer. The value 0 is
+            silent, and the value 63 is the loudest. The default value is 10.
+
+        Returns
+        -------
+        DTMFEvent
+            Basically a list of payloads and marks.
+
+        Raises
+        ------
+        ValueError:
+            If the event is not between 0 and 15. Meaning, it is not a standard DTMF code.
+        """
         if TRACE:
             ic()
-        # first DTMF event should have marker bit set
-        payload = dtmf_key  # one byte
-        payload += int(f"{end_of_event:1b}{reserved:1b}{volume:>06b}").to_bytes(
-            1, "big"
-        )  # one byte
-        payload += event_duration.to_bytes(2, "big")  # two bytes
-        print(payload)
-        return payload
+
+        RESERVED = 0
+
+        event_codes = {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 5,
+            "6": 6,
+            "7": 7,
+            "8": 8,
+            "9": 9,
+            "*": 10,
+            "#": 11,
+            "A": 12,
+            "B": 13,
+            "C": 14,
+            "D": 15,
+        }
+
+        if event not in event_codes.keys():
+            raise ValueError(
+                f"DTMF event must be between 0 and 15. Got {event} instead."
+            )
+
+        dtmf_event = DTMFEvent()
+
+        # First generate the event payloads
+        end_of_event = 0
+        for idx, event_repetition in enumerate(range(event_repetition)):
+            duration = (event_repetition + 1) * timestamp_len
+            dtmf_event_payload = DTMFEventPayload(
+                payload=int(
+                    f"{event_codes[event]}{end_of_event:1b}{RESERVED:1b}{volume:>06b}{duration:>016b}",
+                    2,
+                ).to_bytes(4, "big"),
+                marker=True if idx == 0 else False,
+                update_sequence=True,
+                update_timestamp=True,
+            )
+            dtmf_event.add_payload(dtmf_event_payload)
+
+        # Now generate End of event and repeat it
+        end_of_event = 1
+        for idx, event_repetition in enumerate(range(end_of_event_retransmission)):
+            if idx == 0:
+                # use previously generated duration
+                # and add one more length of timestamp
+                # the rest of the packets are just
+                # repetitions
+                duration = duration + timestamp_len
+            dtmf_event_payload = DTMFEventPayload(
+                payload=int(
+                    f"{event_codes[event]}{end_of_event:1b}{RESERVED:1b}{volume:>06b}{duration:>016b}",
+                    2,
+                ).to_bytes(4, "big"),
+                marker=False,
+                update_sequence=True if idx == 0 else False,
+                update_timestamp=False,
+            )
+            dtmf_event.add_payload(dtmf_event_payload)
+
+        return dtmf_event

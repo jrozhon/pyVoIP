@@ -256,7 +256,7 @@ class VoIPCall:
             ic()
         for x in self.RTPClients:
             # DTMF is actually a hexademical number
-            x.outgoing_dtmf.append(str(code).encode("utf-8"))
+            x.outgoing_dtmf.append(code)
 
     def gen_ms(self) -> dict[int, dict[int, RTP.PayloadType]]:
         """
