@@ -1,6 +1,6 @@
 from rich import print
 
-__all__ = ["SIP", "RTP", "VoIP"]
+__all__ = ["SIP", "RTP", "voip"]
 
 __version__ = "0.1.4"
 
@@ -46,5 +46,5 @@ from pyvoip.proto.RTP import PayloadType  # noqa: E402
 SIPCompatibleMethods = ["INVITE", "ACK", "BYE", "CANCEL", "OPTIONS"]
 SIPCompatibleVersions = ["SIP/2.0"]
 
-RTPCompatibleVersions = [2]
+RTPCompatibleVersions = [0, 2]  # 0 - STUN, 2 - RTP
 RTPCompatibleCodecs = [PayloadType.PCMU, PayloadType.PCMA, PayloadType.EVENT]

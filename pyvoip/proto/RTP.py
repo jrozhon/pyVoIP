@@ -175,6 +175,12 @@ class PayloadType(Enum):
 
 
 class RTPPacketManager:
+    """
+    This class is responsible for managing the RTP packets.
+    There is one instance for sending and one for receiving.
+    Buffer actually works as a FIFO queue or stack.
+    """
+
     def __init__(self):
         if TRACE:
             ic()
@@ -285,6 +291,9 @@ class RTPMessage:
         self.version = int(byte[0:2], 2)
         if self.version not in self.RTPCompatibleVersions:
             raise RTPParseError(f"RTP Version {self.version} not compatible.")
+        if self.version == 0:
+            # this is STUN protocol MUXED with RTP so just ignore it
+            return
         self.padding = bool(int(byte[2], 2))
         self.extension = bool(int(byte[3], 2))
         self.CC = int(byte[4:], 2)
