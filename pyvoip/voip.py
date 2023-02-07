@@ -13,6 +13,7 @@ from rich import print
 
 import pyvoip
 from pyvoip.lib.credentials import Credentials
+from pyvoip.lib.helpers import Queue
 from pyvoip.proto import RTP, SIP
 from pyvoip.sock.transport import TransportMode
 
@@ -72,6 +73,7 @@ class VoIPCall:
         bind_ip: str,
         ms: Optional[dict[int, RTP.PayloadType]] = None,
         sendmode="sendonly",
+        queue: Queue | None = None,
     ):
         if TRACE:
             ic()
@@ -101,6 +103,7 @@ class VoIPCall:
         # on whether we received or originated the call.
         # Will need to refactor the code later to properly type this.
         self.assignedPorts: Any = {}
+        self.queue = queue
 
         if callstate == CallState.RINGING:
             audio = []
@@ -505,6 +508,7 @@ class VoIPPhone:
         call_callback: Optional[Callable[["VoIPCall"], None]] = None,
         rtp_port_low=10000,
         rtp_port_high=20000,
+        queue: Queue | None = None,
     ):
         if TRACE:
             ic()
@@ -547,6 +551,12 @@ class VoIPPhone:
         self.threads: list[Timer] = []
         # Allows you to find call ID based off thread.
         self.threadLookup: dict[Timer, str] = {}
+
+        # allow passing the queue to store the inforamtion about states/messages of the phone
+        # and its clients/calls to send them to the controlling entitiy
+        # i.e. for evaluation of calls, signaling, etc.
+        self.queue = queue
+
         self.sip = SIP.SIPClient(
             server,
             port,
@@ -556,6 +566,7 @@ class VoIPPhone:
             bind_port=bind_port,
             call_callback=self.callback,  # this is just a reference to the callback method
             transport_mode=self.transport_mode,
+            queue=self.queue,
         )
 
     @property
@@ -815,6 +826,7 @@ class VoIPPhone:
             sess_id,
             self.bind_ip,
             sendmode=self.recvmode,
+            queue=self.queue,
         )
 
     def start(self) -> None:
@@ -930,6 +942,7 @@ class VoIPPhone:
             self.bind_ip,
             ms=medias,
             sendmode=self.sendmode,
+            queue=self.queue,
         )
 
         return self.calls[call_id]

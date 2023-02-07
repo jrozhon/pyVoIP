@@ -77,6 +77,7 @@ class SIPClient:
         bind_port: int = 5060,
         call_callback: Optional[Callable[[SIPMessage], Optional[str]]] = None,
         transport_mode: TransportMode = TransportMode.UDP,
+        queue: Any = None,
     ):
         if TRACE:
             ic()
@@ -104,6 +105,7 @@ class SIPClient:
         self.byeCounter = Counter()
         self.callID = Counter()
         self.sessID = Counter()
+        self.queue = queue
 
         self.urnUUID = self.gen_urn_uuid()
         self.nc: dict[str, Counter] = {}
