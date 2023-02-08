@@ -14,7 +14,7 @@ from rich import print
 
 import pyvoip
 from pyvoip.lib.credentials import Credentials
-from pyvoip.lib.helpers import Counter
+from pyvoip.lib.helpers import Counter, MsgQ
 from pyvoip.proto.SIP.error import InvalidAccountInfoError, SIPParseError
 from pyvoip.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
 from pyvoip.sock.transport import TransportMode
@@ -77,11 +77,12 @@ class SIPClient:
         bind_port: int = 5060,
         call_callback: Optional[Callable[[SIPMessage], Optional[str]]] = None,
         transport_mode: TransportMode = TransportMode.UDP,
-        queue: Any = None,
+        queue: MsgQ | None = None,
     ):
         if TRACE:
             ic()
         self.uuid = uuid.uuid4()
+        self.scope = "SIPClient"
         self.NSD = False
         self.server = server
         self.port = port

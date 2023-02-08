@@ -13,7 +13,7 @@ from rich import print
 
 import pyvoip
 from pyvoip.lib.credentials import Credentials
-from pyvoip.lib.helpers import Queue
+from pyvoip.lib.helpers import MsgQ, StrQ
 from pyvoip.proto import RTP, SIP
 from pyvoip.sock.transport import TransportMode
 
@@ -73,7 +73,7 @@ class VoIPCall:
         bind_ip: str,
         ms: Optional[dict[int, RTP.PayloadType]] = None,
         sendmode="sendonly",
-        queue: Queue | None = None,
+        queue: MsgQ | None = None,
     ):
         if TRACE:
             ic()
@@ -89,8 +89,9 @@ class VoIPCall:
         self.rtp_port_low = self.phone.rtp_port_low
         self.sendmode = sendmode
 
-        self.dtmfLock = Lock()
-        self.dtmf = io.StringIO()
+        # self.dtmfLock = Lock()
+        # self.dtmf = io.StringIO()
+        self.dtmf_q = StrQ()
 
         self.RTPClients: list[RTP.RTPClient] = []
 
@@ -237,29 +238,25 @@ class VoIPCall:
             self.phone.release_ports(call=self)
 
     def dtmf_callback(self, code: str) -> None:
-        if TRACE:
+        self.dtmf_q.enq(code)
+        if debug:
             ic()
-        self.dtmfLock.acquire()
-        bufferloc = self.dtmf.tell()
-        self.dtmf.seek(0, 2)
-        self.dtmf.write(code)
-        self.dtmf.seek(bufferloc, 0)
-        self.dtmfLock.release()
+            print(f"[bright_black]Received DTMF: [/bright_black][red]{code}[/red]. ")
+            print(
+                f"[bright_black]Current DTMF Queue: [/bright_black][red]{self.dtmf_q}[/red]. "
+            )
 
     def get_dtmf(self, length=1) -> str:
         if TRACE:
             ic()
-        self.dtmfLock.acquire()
-        packet = self.dtmf.read(length)
-        self.dtmfLock.release()
-        return packet
+        return self.dtmf_q.deqn(length)
 
     def send_dtmf(self, code: str) -> None:
         if TRACE:
             ic()
         for x in self.RTPClients:
             # DTMF is actually a hexademical number
-            x.outgoing_dtmf.append(code)
+            x.outgoing_dtmf.enq(code)
 
     def gen_ms(self) -> dict[int, dict[int, RTP.PayloadType]]:
         """
@@ -446,28 +443,11 @@ class VoIPCall:
         Audio must be in the format of a bytes object.
         Linear PCM 16-bit, 8kHz, mono is the required format.
 
-        There is an addition to allow for sending DTMF codes,
-        but it is a rather naive approach and should be handled
-        separately.
-
-        In case of DTMF, there are 4 key events with first
-        having the Marker set to True (1) and the rest set to False (0).
-        Timestamp is not incremented, but the sequence number is. Event
-        duration is updated as well.
-
-        Then, there are 3 key events with end of event set to True (1).
-        First one, updates the timestamp and the Event duration. The
-        remaining two are just repetitions.
-
-
         Parameters
         ----------
         data
             Bytes object of audio data
 
-        dtmf
-            Bytes object of DTMF codes. Actually just one key and the
-            RTP client will handle the rest.
 
         Returns
         -------
@@ -508,7 +488,7 @@ class VoIPPhone:
         call_callback: Optional[Callable[["VoIPCall"], None]] = None,
         rtp_port_low=10000,
         rtp_port_high=20000,
-        queue: Queue | None = None,
+        queue: MsgQ | None = None,
     ):
         if TRACE:
             ic()

@@ -4,6 +4,7 @@ import random
 import socket
 import threading
 import time
+import uuid
 import warnings
 from enum import Enum
 from threading import Timer
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from rich import print
 
 import pyvoip
+from pyvoip.lib.helpers import MsgQ, StrQ
 
 __all__ = [
     "add_bytes",
@@ -340,10 +342,14 @@ class RTPClient:
         out_port: int,
         sendrecv: TransmitType,
         dtmf: Optional[Callable[[str], None]] = None,
+        queue: MsgQ | None = None,
     ):
         if TRACE:
             ic()
         self.NSD = True
+
+        self.uuid = uuid.uuid4()
+        self.scope = "RTPClient"
         # Example: {0: PayloadType.PCMU, 101: PayloadType.EVENT}
         self.assoc = assoc
         debug("Selecting audio codec for transmission")
@@ -376,19 +382,32 @@ class RTPClient:
         self.outTimestamp = random.randint(1, 10000)
         self.outSSRC = random.randint(1000, 65530)
         self._outgoing_dtmf: list[str] = []  # A container for DTMF events
+        self.outgoing_dtmf: StrQ = StrQ()  # A container for DTMF events
         self._preference = PayloadType.UNKNOWN  # Initial value of _preference
 
-    @property
-    def outgoing_dtmf(self) -> list[str]:
-        if TRACE:
-            ic()
-        return self._outgoing_dtmf
+    # @property
+    # def outgoing_dtmf(self) -> list[str]:
+    #     if TRACE:
+    #         ic()
+    #     return self._outgoing_dtmf
+    #
+    # @outgoing_dtmf.setter
+    # def outgoing_dtmf(self, value: list[str]) -> None:
+    #     if TRACE:
+    #         ic()
+    #     self._outgoing_dtmf = value
 
-    @outgoing_dtmf.setter
-    def outgoing_dtmf(self, value: list[str]) -> None:
-        if TRACE:
-            ic()
-        self._outgoing_dtmf = value
+    # @property
+    # def outgoing_dtmf(self) -> StrQ:
+    #     if TRACE:
+    #         ic()
+    #     return self._outgoing_dtmf
+    #
+    # @outgoing_dtmf.setter
+    # def outgoing_dtmf(self, value: str) -> None:
+    #     if TRACE:
+    #         ic()
+    #     self._outgoing_dtmf.enq(value)
 
     def start(self) -> None:
         if TRACE:
@@ -505,7 +524,8 @@ class RTPClient:
         if TRACE:
             ic()
         # take the first recorded event
-        event = self.outgoing_dtmf.pop(0)
+        event = self.outgoing_dtmf.deq()
+        # event = self.outgoing_dtmf.pop(0)
         # generate payloads for the event
         dtmf_event = self.gen_telephone_event(event)
 
