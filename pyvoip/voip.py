@@ -1,10 +1,8 @@
 import audioop
-import io
 import random
 import time
 import uuid
 import warnings
-from enum import Enum
 from threading import Lock, Timer
 from typing import Any, Callable, Optional
 
@@ -12,8 +10,11 @@ from icecream import ic
 from rich import print
 
 import pyvoip
-from pyvoip.lib.credentials import Credentials
+from pyvoip.lib.exceptions import (InvalidRangeError, InvalidStateError,
+                                   NoPortsAvailableError)
 from pyvoip.lib.helpers import MsgQ, StrQ
+from pyvoip.lib.models import (CallState, Credentials, Message, PhoneEvent,
+                               PhoneEventState, PhoneStatus)
 from pyvoip.proto import RTP, SIP
 from pyvoip.sock.transport import TransportMode
 
@@ -28,39 +29,6 @@ __all__ = [
 
 debug = pyvoip.debug
 TRACE = pyvoip.TRACE
-
-
-class InvalidRangeError(Exception):
-    pass
-
-
-class InvalidStateError(Exception):
-    pass
-
-
-class NoPortsAvailableError(Exception):
-    pass
-
-
-class CallState(str, Enum):
-    DIALING = "DIALING"
-    RINGING = "RINGING"
-    ANSWERED = "ANSWERED"
-    ENDED = "ENDED"
-
-
-class PhoneStatus(str, Enum):
-    INACTIVE = "INACTIVE"  # Phone was instantiated but not started, or was stopped.
-    CONNECTING = "CONNECTING"  # Phone tries to bind to the network.
-    CONNECTED = "CONNECTED"  # Phone is bound to the network.
-    REGISTERING = "REGISTERING"  # Phone is trying to register with the SIP server.
-    REGISTERED = "REGISTERED"  # Phone is registered with the SIP server.
-    DEREGISTERING = (
-        "DEREGISTERING"  # Phone is trying to deregister with the SIP server.
-    )
-    FAILED = (
-        "FAILED"  # Phone failed to bind to the network or register with the SIP server.
-    )
 
 
 class VoIPCall:
@@ -495,7 +463,10 @@ class VoIPPhone:
         if rtp_port_low > rtp_port_high:
             raise InvalidRangeError("'rtp_port_high' must be >= 'rtp_port_low'")
 
+        # first status is set directly, then the setter is called
+        self._status = PhoneStatus.OFFLINE
         self.uuid = uuid.uuid4()  # used to reference the phone in external systems
+        self.queue = queue
         self.rtp_port_low = rtp_port_low
         self.rtp_port_high = rtp_port_high
         # a flag telling that the phone is registered or not
@@ -519,8 +490,6 @@ class VoIPPhone:
             server=server,
         )
         self.call_callback = call_callback
-        self._status = None
-        self.status = PhoneStatus.INACTIVE
         self.transport_mode = transport_mode
 
         # "recvonly", "sendrecv", "sendonly", "inactive"
@@ -535,8 +504,8 @@ class VoIPPhone:
         # allow passing the queue to store the inforamtion about states/messages of the phone
         # and its clients/calls to send them to the controlling entitiy
         # i.e. for evaluation of calls, signaling, etc.
-        self.queue = queue
 
+        self.status = PhoneStatus.INACTIVE
         self.sip = SIP.SIPClient(
             server,
             port,
@@ -584,7 +553,21 @@ class VoIPPhone:
         """
         if TRACE:
             ic()
+        orig_state = self._status
         self._status = value
+
+        # need to check against None as empty Q is also False
+        if self.queue is not None:
+            self.queue.enq(
+                Message(
+                    id=self.uuid,
+                    scope=f"{self.__class__.__name__}",
+                    event=PhoneEventState(
+                        event=PhoneEvent.STATE_CHANGED,
+                        states={"original": orig_state, "new": value},
+                    ),
+                )
+            )
         if TRACE:
             print(
                 f"[bright_black]Phone status changed to: [/bright_black][red]{value}[/red]"

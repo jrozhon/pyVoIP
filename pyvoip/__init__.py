@@ -5,7 +5,7 @@ __all__ = ["SIP", "RTP", "voip"]
 __version__ = "0.1.4"
 
 TRACE = True
-DEBUG = True
+DEBUG = False
 
 """
 The higher this variable is, the more often RTP packets are sent.

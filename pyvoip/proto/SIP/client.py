@@ -13,9 +13,9 @@ import jinja2
 from rich import print
 
 import pyvoip
-from pyvoip.lib.credentials import Credentials
+from pyvoip.lib.exceptions import InvalidAccountInfoError, SIPParseError
 from pyvoip.lib.helpers import Counter, MsgQ
-from pyvoip.proto.SIP.error import InvalidAccountInfoError, SIPParseError
+from pyvoip.lib.models import Credentials
 from pyvoip.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
 from pyvoip.sock.transport import TransportMode
 from pyvoip.templates.body import SIPBodyTemplate

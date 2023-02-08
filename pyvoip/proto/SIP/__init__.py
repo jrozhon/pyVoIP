@@ -1,4 +1,5 @@
-from pyvoip.proto.SIP import client, error, message
+from pyvoip.lib.exceptions import InvalidAccountInfoError, SIPParseError
+from pyvoip.proto.SIP import client, message
 
 __all__ = [
     "SIPClient",
@@ -12,5 +13,5 @@ SIPClient = client.SIPClient
 SIPMessage = message.SIPMessage
 SIPStatus = message.SIPStatus
 SIPMessageType = message.SIPMessageType
-InvalidAccountInfoError = error.InvalidAccountInfoError
-SIPParseError = error.SIPParseError
+InvalidAccountInfoError = InvalidAccountInfoError
+SIPParseError = SIPParseError

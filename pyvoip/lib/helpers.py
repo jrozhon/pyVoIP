@@ -1,22 +1,7 @@
+import uuid
 from collections import deque
 
-from pydantic import BaseModel
-
-
-class Message(BaseModel):
-    """
-    A simple message class to be used for sending messages to the
-    controlling application.
-    """
-
-    id: int
-    text: str
-
-    def __repr__(self) -> str:
-        return f"Message(id={self.id}, text={self.text})"
-
-    def __str__(self) -> str:
-        return self.text
+from pyvoip.lib.models import Message
 
 
 class Q:

@@ -2,12 +2,9 @@ import json
 from enum import Enum, IntEnum
 from typing import Any, Callable, Optional
 
-import jinja2
-
 import pyvoip
 from pyvoip.lib import regex
-from pyvoip.proto.SIP.error import SIPParseError
-from pyvoip.templates.sip import SIPHeaderTemplate
+from pyvoip.lib.exceptions import SIPParseError
 
 debug = pyvoip.debug
 
