@@ -4,7 +4,7 @@ import time
 import uuid
 import warnings
 from threading import Lock, Timer
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from icecream import ic
 from rich import print
@@ -13,8 +13,8 @@ import pyvoip
 from pyvoip.lib.exceptions import (InvalidRangeError, InvalidStateError,
                                    NoPortsAvailableError)
 from pyvoip.lib.helpers import MsgQ, StrQ
-from pyvoip.lib.models import (CallState, Credentials, Message, PhoneEvent,
-                               PhoneEventState, PhoneStatus)
+from pyvoip.lib.models import (CallEventState, CallState, Credentials, Message,
+                               PhoneEvent, PhoneEventState, PhoneStatus)
 from pyvoip.proto import RTP, SIP
 from pyvoip.sock.transport import TransportMode
 
@@ -39,18 +39,21 @@ class VoIPCall:
         request: SIP.SIPMessage,
         session_id: int,
         bind_ip: str,
-        ms: Optional[dict[int, RTP.PayloadType]] = None,
+        ms: dict[int, RTP.PayloadType] | None = None,
         sendmode="sendonly",
         queue: MsgQ | None = None,
     ):
         if TRACE:
             ic()
-        self._state = None
+        self.queue = queue
+        self.call_id = request.headers["Call-ID"]
+        self._state = CallState.NEW  # initial value for logging
+        self.uuid = uuid.uuid4()
+        self.master_uuid = phone.uuid
         self.state = callstate
         self.phone = phone
         self.sip = self.phone.sip
         self.request = request
-        self.call_id = request.headers["Call-ID"]
         self.session_id = str(session_id)
         self.bind_ip = bind_ip
         self.rtp_port_high = self.phone.rtp_port_high
@@ -72,7 +75,6 @@ class VoIPCall:
         # on whether we received or originated the call.
         # Will need to refactor the code later to properly type this.
         self.assignedPorts: Any = {}
-        self.queue = queue
 
         if callstate == CallState.RINGING:
             audio = []
@@ -172,10 +174,25 @@ class VoIPCall:
     def state(self, value: CallState) -> None:
         if TRACE:
             ic()
+        orig_state = self._state
         self._state = value
         if TRACE:
             print(
                 f"[bright_black]Call state changed to: [/bright_black][red]{value}[/red]"
+            )
+
+        if self.queue is not None:
+            self.queue.enq(
+                Message(
+                    id=self.uuid,
+                    master_id=self.master_uuid,
+                    scope=f"{self.__class__.__name__}",
+                    event=CallEventState(
+                        event="CALL_STATE_CHANGED",
+                        call_id=self.call_id,
+                        states={"original": orig_state, "new": value},
+                    ),
+                )
             )
 
     def create_rtp_clients(
@@ -453,7 +470,7 @@ class VoIPPhone:
         bind_ip="0.0.0.0",
         bind_port=5060,
         transport_mode=TransportMode.UDP,
-        call_callback: Optional[Callable[["VoIPCall"], None]] = None,
+        call_callback: Callable[["VoIPCall"], None] | None = None,
         rtp_port_low=10000,
         rtp_port_high=20000,
         queue: MsgQ | None = None,
@@ -516,6 +533,7 @@ class VoIPPhone:
             call_callback=self.callback,  # this is just a reference to the callback method
             transport_mode=self.transport_mode,
             queue=self.queue,
+            master_id=self.uuid,  # pass the phone's uuid to the SIP client for future reference
         )
 
     @property
@@ -561,6 +579,7 @@ class VoIPPhone:
             self.queue.enq(
                 Message(
                     id=self.uuid,
+                    master_id=self.uuid,
                     scope=f"{self.__class__.__name__}",
                     event=PhoneEventState(
                         event=PhoneEvent.STATE_CHANGED,
@@ -568,6 +587,7 @@ class VoIPPhone:
                     ),
                 )
             )
+        print("Phone", self.queue)
         if TRACE:
             print(
                 f"[bright_black]Phone status changed to: [/bright_black][red]{value}[/red]"
@@ -600,7 +620,7 @@ class VoIPPhone:
             "calls": len(self.calls),
         }
 
-    def callback(self, request: SIP.SIPMessage) -> Optional[str]:
+    def callback(self, request: SIP.SIPMessage) -> str | None:
         if TRACE:
             ic()
         """
@@ -848,7 +868,7 @@ class VoIPPhone:
     def call(
         self,
         number: str,
-        payload_types: Optional[list[RTP.PayloadType]] = None,
+        payload_types: list[RTP.PayloadType] | None = None,
     ) -> VoIPCall:
         """
         Call a number/name. This will create a new VoIPCall object. Acting as UAC.
@@ -944,7 +964,7 @@ class VoIPPhone:
 
         return selection
 
-    def release_ports(self, call: Optional[VoIPCall] = None) -> None:
+    def release_ports(self, call: VoIPCall | None = None) -> None:
         if TRACE:
             ic()
         self.portsLock.acquire()

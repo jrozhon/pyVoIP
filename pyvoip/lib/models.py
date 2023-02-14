@@ -11,6 +11,7 @@ class PhoneEvent(str, Enum):
 
 
 class CallState(str, Enum):
+    NEW = "NEW"
     DIALING = "DIALING"
     RINGING = "RINGING"
     ANSWERED = "ANSWERED"
@@ -37,19 +38,31 @@ class PhoneEventState(BaseModel):
     states: dict[Literal["original", "new"], PhoneStatus]
 
 
+class SIPEventMessage(BaseModel):
+    event: Literal["SIPMessage"]
+    direction: Literal["incoming", "outgoing"]
+    remote_ip: str
+    remote_port: int
+    message: str
+
+
+class CallEventState(BaseModel):
+    event: Literal["CALL_STATE_CHANGED"]
+    call_id: str
+    states: dict[Literal["original", "new"], CallState]
+
+
 class Message(BaseModel):
     """
     A simple message class to be used for sending messages to the
     controlling application.
     """
 
-    id: uuid.UUID = uuid.uuid4()
+    id: uuid.UUID
+    master_id: uuid.UUID
     timestamp: datetime = Field(default_factory=datetime.now)
-    scope: Literal["VoIPPhone", "VoIPCall"]
-    event: PhoneEventState
-
-    def __str__(self) -> str:
-        return dict(self)
+    scope: Literal["VoIPPhone", "VoIPCall", "SIPClient"]
+    event: PhoneEventState | SIPEventMessage | CallEventState
 
 
 class Credentials(BaseModel):

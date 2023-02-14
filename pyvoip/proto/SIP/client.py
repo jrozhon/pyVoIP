@@ -8,6 +8,7 @@ import uuid
 from base64 import b16encode, b64encode
 from threading import Lock, Timer
 from typing import TYPE_CHECKING, Any, Callable, Optional
+from uuid import UUID
 
 import jinja2
 from rich import print
@@ -15,7 +16,7 @@ from rich import print
 import pyvoip
 from pyvoip.lib.exceptions import InvalidAccountInfoError, SIPParseError
 from pyvoip.lib.helpers import Counter, MsgQ
-from pyvoip.lib.models import Credentials
+from pyvoip.lib.models import Credentials, Message, SIPEventMessage
 from pyvoip.proto.SIP.message import SIPMessage, SIPMessageType, SIPStatus
 from pyvoip.sock.transport import TransportMode
 from pyvoip.templates.body import SIPBodyTemplate
@@ -73,6 +74,7 @@ class SIPClient:
         port: int,
         user: str,
         credentials: Credentials,
+        master_id: UUID,
         bind_ip: str = "0.0.0.0",
         bind_port: int = 5060,
         call_callback: Optional[Callable[[SIPMessage], Optional[str]]] = None,
@@ -81,7 +83,8 @@ class SIPClient:
     ):
         if TRACE:
             ic()
-        self.uuid = uuid.uuid4()
+        self.uuid: UUID = uuid.uuid4()  # local id of the given instance
+        self.master_id: UUID = master_id
         self.scope = "SIPClient"
         self.NSD = False
         self.server = server
@@ -144,6 +147,22 @@ class SIPClient:
         print(message, end="\n")
         # print(message.encode("utf-8"), end="\n")
 
+        if self.queue is not None:
+            self.queue.enq(
+                Message(
+                    id=self.uuid,
+                    master_id=self.master_id,
+                    scope=f"{self.__class__.__name__}",
+                    event=SIPEventMessage(
+                        event="SIPMessage",
+                        direction="outgoing",
+                        remote_ip=dst,
+                        remote_port=dst_port,
+                        message=message,
+                    ),
+                )
+            )
+
         try:
             self.out.sendto(message.encode("utf8"), (dst, dst_port))
         except socket.timeout:
@@ -177,6 +196,27 @@ class SIPClient:
             print(raw.decode("utf8"), end="\n")
         except Exception as ex:
             pass
+
+        if self.queue is not None:
+            try:
+                message = raw.decode("utf8")
+            except Exception as ex:
+                message = "Unknown protocol"
+
+            self.queue.enq(
+                Message(
+                    id=self.uuid,
+                    master_id=self.master_id,
+                    scope=f"{self.__class__.__name__}",
+                    event=SIPEventMessage(
+                        event="SIPMessage",
+                        direction="incoming",
+                        remote_ip=addr,
+                        remote_port=port,
+                        message=message,
+                    ),
+                )
+            )
         return raw
 
     def recv(self) -> None:
