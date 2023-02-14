@@ -1325,7 +1325,7 @@ class SIPClient:
                     debug("=" * 50)
                     debug("Unauthorized, SIP Message Log:\n")
                     debug("SENT")
-                    debug(firstRequest)
+                    debug(first_register_request)
                     debug("\nRECEIVED")
                     debug(first_response.summary())
                     debug("\nSENT (DO NOT SHARE THIS PACKET)")
