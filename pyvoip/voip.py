@@ -587,7 +587,6 @@ class VoIPPhone:
                     ),
                 )
             )
-        print("Phone", self.queue)
         if TRACE:
             print(
                 f"[bright_black]Phone status changed to: [/bright_black][red]{value}[/red]"

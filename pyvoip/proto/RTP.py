@@ -759,7 +759,7 @@ class RTPClient:
             duration = (event_repetition + 1) * timestamp_len
             dtmf_event_payload = DTMFEventPayload(
                 payload=int(
-                    f"{event_codes[event]}{end_of_event:1b}{RESERVED:1b}{volume:>06b}{duration:>016b}",
+                    f"{event_codes[event]:>08b}{end_of_event:1b}{RESERVED:1b}{volume:>06b}{duration:>016b}",
                     2,
                 ).to_bytes(4, "big"),
                 marker=True if idx == 0 else False,
@@ -779,7 +779,7 @@ class RTPClient:
                 duration = duration + timestamp_len
             dtmf_event_payload = DTMFEventPayload(
                 payload=int(
-                    f"{event_codes[event]}{end_of_event:1b}{RESERVED:1b}{volume:>06b}{duration:>016b}",
+                    f"{event_codes[event]:>08b}{end_of_event:1b}{RESERVED:1b}{volume:>06b}{duration:>016b}",
                     2,
                 ).to_bytes(4, "big"),
                 marker=False,
