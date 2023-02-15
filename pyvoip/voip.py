@@ -13,8 +13,9 @@ import pyvoip
 from pyvoip.lib.exceptions import (InvalidRangeError, InvalidStateError,
                                    NoPortsAvailableError)
 from pyvoip.lib.helpers import MsgQ, StrQ
-from pyvoip.lib.models import (CallEventState, CallState, Credentials, Message,
-                               PhoneEvent, PhoneEventState, PhoneStatus)
+from pyvoip.lib.models import (CallEventState, CallState, Credentials,
+                               DTMFEventMessage, Message, PhoneEvent,
+                               PhoneEventState, PhoneStatus)
 from pyvoip.proto import RTP, SIP
 from pyvoip.sock.transport import TransportMode
 
@@ -224,6 +225,23 @@ class VoIPCall:
 
     def dtmf_callback(self, code: str) -> None:
         self.dtmf_q.enq(code)
+
+        # log event to the Message Queue
+        if self.queue is not None:
+            self.queue.enq(
+                Message(
+                    id=self.uuid,
+                    master_id=self.master_uuid,
+                    scope=f"{self.__class__.__name__}",
+                    event=DTMFEventMessage(
+                        event="DTMF",
+                        direction="incoming",
+                        call_id=self.call_id,
+                        code=code,
+                    ),
+                )
+            )
+
         if debug:
             ic()
             print(f"[bright_black]Received DTMF: [/bright_black][red]{code}[/red]. ")
@@ -242,6 +260,22 @@ class VoIPCall:
         for x in self.RTPClients:
             # DTMF is actually a hexademical number
             x.outgoing_dtmf.enq(code)
+
+        # log event to the Message Queue
+        if self.queue is not None:
+            self.queue.enq(
+                Message(
+                    id=self.uuid,
+                    master_id=self.master_uuid,
+                    scope=f"{self.__class__.__name__}",
+                    event=DTMFEventMessage(
+                        event="DTMF",
+                        direction="outgoing",
+                        call_id=self.call_id,
+                        code=code,
+                    ),
+                )
+            )
 
     def gen_ms(self) -> dict[int, dict[int, RTP.PayloadType]]:
         """

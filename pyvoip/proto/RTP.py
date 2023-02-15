@@ -348,6 +348,7 @@ class RTPClient:
             ic()
         self.NSD = True
 
+        self.queue = queue
         self.uuid = uuid.uuid4()
         self.scope = "RTPClient"
         # Example: {0: PayloadType.PCMU, 101: PayloadType.EVENT}

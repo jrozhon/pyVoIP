@@ -52,6 +52,13 @@ class CallEventState(BaseModel):
     states: dict[Literal["original", "new"], CallState]
 
 
+class DTMFEventMessage(BaseModel):
+    event: Literal["DTMF"]
+    direction: Literal["incoming", "outgoing"]
+    call_id: str
+    code: str
+
+
 class Message(BaseModel):
     """
     A simple message class to be used for sending messages to the
@@ -61,8 +68,8 @@ class Message(BaseModel):
     id: uuid.UUID
     master_id: uuid.UUID
     timestamp: datetime = Field(default_factory=datetime.now)
-    scope: Literal["VoIPPhone", "VoIPCall", "SIPClient"]
-    event: PhoneEventState | SIPEventMessage | CallEventState
+    scope: Literal["VoIPPhone", "VoIPCall", "SIPClient", "RTPClient"]
+    event: PhoneEventState | SIPEventMessage | CallEventState | DTMFEventMessage
 
 
 class Credentials(BaseModel):
